@@ -13,7 +13,8 @@
     <h1>Inbox groups</h1>
     <p>
       Write one rule per line: <code>&lt;database URL or id&gt; = &lt;group name&gt;</code>. Several databases can share
-      one group name. The line order sets the group order. A notification that matches no rule goes to the "Other" group.
+      one group name. The line order sets the group order. A notification that matches no rule goes to a group with the name of its
+      database. The "Other" group holds the notifications of pages outside a database.
     </p>
     <textarea id="rules" rows="16" spellcheck="false"></textarea>
     <p><button id="save">Save</button> <span id="status"></span></p>

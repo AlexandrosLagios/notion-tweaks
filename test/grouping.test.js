@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseRules, resolveDatabaseId, groupNotifications } = require('../src/grouping.js');
+const { parseRules, resolveDatabaseId, groupNotifications, withoutNotifications } = require('../src/grouping.js');
 const log = require('./fixtures/notification-log.json');
 
 const TASKS_ONE = '11111111111141118111111111111111';
@@ -79,24 +79,36 @@ test('resolveDatabaseId returns null when the parent chain loops', () => {
   assert.equal(resolveDatabaseId(log.recordMap, notification('b8000000-0000-4000-8000-000000000008')), null);
 });
 
-test('groupNotifications orders the groups by the rules and puts Other last', () => {
-  assert.deepEqual(groupsFor(RULES_TEXT).map((group) => group.name), ['Engineering', 'Planning', 'Other']);
+test('groupNotifications puts the rule groups first, the other databases next, and Other last', () => {
+  assert.deepEqual(groupsFor(RULES_TEXT).map((group) => group.name), ['Engineering', 'Planning', 'Tasks', 'Other']);
 });
 
 test('groupNotifications merges databases that share a group name', () => {
   assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[0]), ['b7', 'b2', 'b1']);
 });
 
-test('groupNotifications sends a database without a rule to Other, even when its name matches a rule database', () => {
-  assert.ok(itemIds(groupsFor(RULES_TEXT)[2]).includes('b3'));
+test('groupNotifications groups a database without a rule under the database name', () => {
+  assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[2]), ['b3']);
+});
+
+test('groupNotifications without rules merges databases that share a name', () => {
+  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2', 'b1']);
+});
+
+test('groupNotifications orders the database groups by their newest notification', () => {
+  assert.deepEqual(groupsFor('').map((group) => group.name), ['Tasks', 'Roadmap', 'Other']);
+});
+
+test('groupNotifications keeps only pages outside a database in Other', () => {
+  assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[3]), ['b8', 'b6', 'b5']);
 });
 
 test('groupNotifications sorts each group from newest to oldest', () => {
-  assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[2]), ['b8', 'b6', 'b5', 'b3']);
+  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2', 'b1']);
 });
 
 test('groupNotifications counts the unread notifications of each group', () => {
-  assert.deepEqual(groupsFor(RULES_TEXT).map((group) => group.unread), [1, 1, 1]);
+  assert.deepEqual(groupsFor(RULES_TEXT).map((group) => group.unread), [1, 1, 0, 1]);
 });
 
 test('groupNotifications matches a rule on the collection id', () => {
@@ -106,7 +118,7 @@ test('groupNotifications matches a rule on the collection id', () => {
 
 test('groupNotifications leaves out a group without notifications', () => {
   const groups = groupsFor(`55555555555555558555555555555555 = Empty\n${ROADMAP} = Planning`);
-  assert.deepEqual(groups.map((group) => group.name), ['Planning', 'Other']);
+  assert.deepEqual(groups.map((group) => group.name), ['Planning', 'Tasks', 'Other']);
 });
 
 test('groupNotifications describes each item for the panel', () => {
@@ -115,9 +127,29 @@ test('groupNotifications describes each item for the panel', () => {
     pageId: 'a1000000000040008000000000000001',
     title: 'Fix login',
     type: 'Update',
+    actors: ['Status Sync'],
     unread: false,
     endTime: 7000,
   });
+});
+
+test('groupNotifications names each person once across the children of a grouped notification', () => {
+  assert.deepEqual(groupsFor(RULES_TEXT)[1].items[0].actors, ['Nikos Roe', 'Maria Doe']);
+});
+
+test('groupNotifications leaves the actors empty when the notification has no activity', () => {
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id.startsWith('b2'));
+  assert.deepEqual(sprint.actors, []);
+});
+
+test('withoutNotifications removes the items and recounts the unread notifications', () => {
+  const groups = withoutNotifications(groupsFor(RULES_TEXT), ['b1000000-0000-4000-8000-000000000001']);
+  assert.deepEqual([itemIds(groups[0]), groups[0].unread], [['b7', 'b2'], 0]);
+});
+
+test('withoutNotifications drops a group that becomes empty', () => {
+  const groups = withoutNotifications(groupsFor(RULES_TEXT), ['b4000000-0000-4000-8000-000000000004']);
+  assert.deepEqual(groups.map((group) => group.name), ['Engineering', 'Tasks', 'Other']);
 });
 
 test('groupNotifications joins the rich-text parts of a title', () => {
@@ -125,6 +157,6 @@ test('groupNotifications joins the rich-text parts of a title', () => {
 });
 
 test('groupNotifications shows Untitled when the page record is missing', () => {
-  const missing = groupsFor(RULES_TEXT)[2].items.find((item) => item.id.startsWith('b6'));
+  const missing = groupsFor(RULES_TEXT)[3].items.find((item) => item.id.startsWith('b6'));
   assert.equal(missing.title, 'Untitled');
 });

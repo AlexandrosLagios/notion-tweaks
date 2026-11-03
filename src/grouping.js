@@ -23,7 +23,11 @@ const NotionTweaksGrouping = (() => {
 
   const record = (recordMap, table, id) => recordMap[table]?.[id]?.value?.value;
 
-  const plainText = (richText) => (richText ?? []).map((part) => part[0]).join('');
+  const plainText = (richText) =>
+    (richText ?? [])
+      .map((part) => part[0])
+      .join('')
+      .trim();
 
   function parseRules(text) {
     const rules = [];
@@ -84,39 +88,78 @@ const NotionTweaksGrouping = (() => {
     return null;
   }
 
+  function actorsOf(recordMap, notification) {
+    const childIds = notification.child_notification_ids ?? [];
+    const activityIds = [
+      notification.activity_id,
+      ...childIds.map((id) => record(recordMap, 'notification', id)?.activity_id),
+    ];
+    const names = activityIds
+      .flatMap((id) => record(recordMap, 'activity', id)?.edits ?? [])
+      .flatMap((edit) => edit.authors ?? [])
+      .map((author) => record(recordMap, author.table, author.id)?.name)
+      .filter(Boolean);
+    return [...new Set(names)];
+  }
+
+  function groupNameOf(database, rules) {
+    if (!database) {
+      return OTHER_GROUP;
+    }
+    const rule = rules.find((candidate) => [database.databaseId, database.collectionId].includes(candidate.databaseId));
+    return rule?.group ?? (database.databaseName || UNTITLED);
+  }
+
+  function summarize(name, items) {
+    return { name, unread: items.filter((item) => item.unread).length, items };
+  }
+
   function groupNotifications({ notificationIds, recordMap }, rules) {
-    const groupOrder = [...new Set(rules.map((rule) => rule.group)), OTHER_GROUP];
-    const itemsByGroup = new Map(groupOrder.map((name) => [name, []]));
+    const itemsByGroup = new Map();
 
     for (const id of notificationIds) {
       const notification = record(recordMap, 'notification', id);
       if (!notification) {
         continue;
       }
-      const database = resolveDatabaseId(recordMap, notification);
-      const rule = database
-        ? rules.find((candidate) => [database.databaseId, database.collectionId].includes(candidate.databaseId))
-        : undefined;
+      const name = groupNameOf(resolveDatabaseId(recordMap, notification), rules);
       const page = record(recordMap, 'block', notification.navigable_block_id);
-      itemsByGroup.get(rule ? rule.group : OTHER_GROUP).push({
+      if (!itemsByGroup.has(name)) {
+        itemsByGroup.set(name, []);
+      }
+      itemsByGroup.get(name).push({
         id,
         pageId: compactId(notification.navigable_block_id),
         title: plainText(page?.properties?.title) || UNTITLED,
         type: TYPE_LABELS[notification.type] ?? notification.type,
+        actors: actorsOf(recordMap, notification),
         unread: !notification.read,
         endTime: Number(notification.end_time),
       });
     }
 
-    return groupOrder
-      .map((name) => {
-        const items = itemsByGroup.get(name).sort((a, b) => b.endTime - a.endTime);
-        return { name, unread: items.filter((item) => item.unread).length, items };
-      })
+    const ruleGroups = [...new Set(rules.map((rule) => rule.group))];
+    const rank = (group) => [
+      group.name === OTHER_GROUP ? 2 : ruleGroups.includes(group.name) ? 0 : 1,
+      ruleGroups.indexOf(group.name),
+      -group.items[0].endTime,
+    ];
+    return [...itemsByGroup]
+      .map(([name, items]) => summarize(name, items.sort((a, b) => b.endTime - a.endTime)))
+      .sort((a, b) => {
+        const [first, second] = [rank(a), rank(b)];
+        return first[0] - second[0] || first[1] - second[1] || first[2] - second[2];
+      });
+  }
+
+  function withoutNotifications(groups, notificationIds) {
+    const removed = new Set(notificationIds);
+    return groups
+      .map((group) => summarize(group.name, group.items.filter((item) => !removed.has(item.id))))
       .filter((group) => group.items.length > 0);
   }
 
-  return { parseRules, resolveDatabaseId, groupNotifications };
+  return { parseRules, resolveDatabaseId, groupNotifications, withoutNotifications };
 })();
 
 if (typeof module !== 'undefined') {

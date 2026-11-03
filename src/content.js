@@ -10,15 +10,28 @@
 
   const render = () => NotionTweaksPanel.render(view, handlers);
 
+  async function cachedSpaceId() {
+    const userId = NotionTweaksApi.activeUserId();
+    const { spaceIds = {} } = await chrome.storage.local.get('spaceIds');
+    if (!spaceIds[userId]) {
+      spaceIds[userId] = await NotionTweaksApi.findSpaceId(userId);
+      await chrome.storage.local.set({ spaceIds });
+    }
+    return spaceIds[userId];
+  }
+
   async function load() {
     const loadId = ++latestLoadId;
     try {
-      const { rulesText = '' } = await chrome.storage.sync.get('rulesText');
-      spaceId = await NotionTweaksApi.findSpaceId();
-      const response = await NotionTweaksApi.loadNotifications(spaceId, size);
+      const [{ rulesText = '' }, currentSpaceId] = await Promise.all([
+        chrome.storage.sync.get('rulesText'),
+        cachedSpaceId(),
+      ]);
+      const response = await NotionTweaksApi.loadNotifications(currentSpaceId, size);
       if (loadId !== latestLoadId) {
         return;
       }
+      spaceId = currentSpaceId;
       view = {
         status: 'ready',
         groups: NotionTweaksGrouping.groupNotifications(response, NotionTweaksGrouping.parseRules(rulesText).rules),
@@ -26,6 +39,7 @@
         groupErrors: {},
       };
     } catch (error) {
+      await chrome.storage.local.remove('spaceIds');
       if (loadId !== latestLoadId) {
         return;
       }
@@ -34,42 +48,40 @@
     render();
   }
 
+  function refresh() {
+    view = view.status === 'ready' ? { ...view, refreshing: true } : LOADING;
+    render();
+    load();
+  }
+
   const handlers = {
-    onReload() {
-      view = LOADING;
-      render();
-      load();
-    },
+    onReload: refresh,
     onLoadMore() {
       size += PAGE_SIZE;
-      load();
+      refresh();
     },
-    async onArchive(group) {
+    async onArchive(notificationIds, groupName) {
       try {
-        await NotionTweaksApi.archiveNotifications(
-          spaceId,
-          group.items.map((item) => item.id),
-        );
-        await load();
+        await NotionTweaksApi.archiveNotifications(spaceId, notificationIds);
+        view = { ...view, groups: NotionTweaksGrouping.withoutNotifications(view.groups, notificationIds) };
       } catch (error) {
-        view = { ...view, groupErrors: { ...view.groupErrors, [group.name]: error.message } };
-        render();
+        view = { ...view, groupErrors: { ...view.groupErrors, [groupName]: error.message } };
       }
+      render();
     },
   };
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message !== TOGGLE_PANEL) {
       return;
     }
+    sendResponse(true);
     if (NotionTweaksPanel.isOpen()) {
       NotionTweaksPanel.close();
       return;
     }
     size = PAGE_SIZE;
-    view = LOADING;
     NotionTweaksPanel.open();
-    render();
-    load();
+    refresh();
   });
 })();

@@ -25,6 +25,11 @@ const NotionTweaksPanel = (() => {
     ul { list-style: none; margin: 0 0 8px; padding: 0; }
     li { position: relative; padding: 6px 0 6px 14px; border-top: 1px solid color-mix(in srgb, CanvasText 8%, transparent); }
     li.unread::before { content: ''; position: absolute; left: 2px; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: #2383e2; }
+    .row { display: flex; align-items: flex-start; gap: 8px; }
+    .row a { flex: 1; }
+    .archive-item { opacity: 0; }
+    li:hover .archive-item, .archive-item:focus-visible { opacity: 1; }
+    .updating { font-size: 12px; opacity: 0.6; }
     a { color: inherit; text-decoration: none; }
     a:hover { text-decoration: underline; }
     small { display: block; font-size: 12px; opacity: 0.6; }
@@ -56,7 +61,23 @@ const NotionTweaksPanel = (() => {
     return new Date(endTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
-  function archiveButton(group, onArchive) {
+  function actorText(actors) {
+    if (actors.length <= 2) {
+      return actors.join(', ');
+    }
+    return `${actors.slice(0, 2).join(', ')} +${actors.length - 2}`;
+  }
+
+  function archiveItemButton(item, groupName, onArchive) {
+    const button = el('button', { className: 'archive-item', textContent: 'Archive' });
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      onArchive([item.id], groupName);
+    });
+    return button;
+  }
+
+  function archiveGroupButton(group, onArchive) {
     const button = el('button', { textContent: 'Archive' });
     let confirmTimer;
     button.addEventListener('click', (event) => {
@@ -66,7 +87,10 @@ const NotionTweaksPanel = (() => {
         clearTimeout(confirmTimer);
         button.disabled = true;
         button.textContent = 'Archiving…';
-        onArchive(group);
+        onArchive(
+          group.items.map((item) => item.id),
+          group.name,
+        );
         return;
       }
       button.textContent = `Archive ${group.items.length}?`;
@@ -87,7 +111,7 @@ const NotionTweaksPanel = (() => {
         {},
         el('span', { textContent: group.name }),
         el('span', { className: 'count', textContent: `${group.unread} unread · ${group.items.length}` }),
-        archiveButton(group, onArchive),
+        archiveGroupButton(group, onArchive),
       ),
     );
     details.addEventListener('toggle', () => {
@@ -108,8 +132,15 @@ const NotionTweaksPanel = (() => {
           el(
             'li',
             { className: item.unread ? 'unread' : '' },
-            el('a', { href: `${location.origin}/p/${item.pageId}`, textContent: item.title }),
-            el('small', { textContent: `${item.type} · ${age(item.endTime)}` }),
+            el(
+              'div',
+              { className: 'row' },
+              el('a', { href: `${location.origin}/p/${item.pageId}`, textContent: item.title }),
+              archiveItemButton(item, group.name, onArchive),
+            ),
+            el('small', {
+              textContent: [actorText(item.actors), item.type, age(item.endTime)].filter(Boolean).join(' · '),
+            }),
           ),
         ),
       ),
@@ -163,7 +194,14 @@ const NotionTweaksPanel = (() => {
       el(
         'div',
         { className: 'panel' },
-        el('header', {}, el('strong', { textContent: 'Inbox groups' }), reload, closeButton),
+        el(
+          'header',
+          {},
+          el('strong', { textContent: 'Inbox groups' }),
+          el('span', { className: 'updating', textContent: view.refreshing ? 'Updating…' : '' }),
+          reload,
+          closeButton,
+        ),
         ...body(view, handlers),
       ),
     );

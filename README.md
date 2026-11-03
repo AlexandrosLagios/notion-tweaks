@@ -9,7 +9,8 @@ The extension adds a panel to the Notion web app at `https://app.notion.com`. Th
 1. Open `chrome://extensions` in Chrome.
 2. Turn on "Developer mode".
 3. Select "Load unpacked", and select this directory.
-4. Reload every open Notion tab.
+
+After a code change, select the reload icon of the extension on `chrome://extensions`.
 
 ## Configure the groups
 
@@ -17,13 +18,14 @@ The extension adds a panel to the Notion web app at `https://app.notion.com`. Th
 2. Write one rule per line: `<database URL or id> = <group name>`.
 3. Select "Save".
 
-Copy the database URL from the address bar of the full-page database. The options page does not save a line without `=`, without a database id, or without a group name. Several databases can share one group name. The line order sets the group order. A notification that matches no rule goes to the "Other" group.
+Copy the database URL from the address bar of the full-page database. The options page does not save a line without `=`, without a database id, or without a group name. Several databases can share one group name. The line order sets the group order. A notification that matches no rule goes to a group with the name of its database. The "Other" group holds the notifications of pages outside a database.
 
 ## Use the panel
 
 1. Open a Notion tab.
 2. Select the extension icon in the Chrome toolbar. The panel opens at the right side of the page.
-3. To archive a group, select "Archive", and then select "Archive <count>?" within 3 seconds.
+3. To archive one notification, point to the row, and select "Archive".
+4. To archive a group, select "Archive" in the group header, and then select "Archive <count>?" within 3 seconds.
 
 The extension has no undo for an archive.
 

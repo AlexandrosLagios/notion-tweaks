@@ -31,8 +31,7 @@ const NotionTweaksApi = (() => {
     return cookie && decodeURIComponent(cookie.slice(ACTIVE_USER_COOKIE.length + 1));
   }
 
-  async function findSpaceId() {
-    const userId = activeUserId();
+  async function findSpaceId(userId) {
     if (!userId) {
       throw new SignedOutError();
     }
@@ -77,5 +76,5 @@ const NotionTweaksApi = (() => {
     });
   }
 
-  return { findSpaceId, loadNotifications, archiveNotifications };
+  return { activeUserId, findSpaceId, loadNotifications, archiveNotifications };
 })();
