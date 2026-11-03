@@ -8,8 +8,9 @@
   let latestLoadId = 0;
   let size = PAGE_SIZE;
   let view = LOADING;
+  let inboxType = NotionTweaksApi.INBOX_TYPE.ALL;
 
-  const render = () => NotionTweaksPanel.render(view, handlers);
+  const render = () => NotionTweaksPanel.render({ ...view, inboxType }, handlers);
 
   async function cachedSpaceId() {
     const userId = NotionTweaksApi.activeUserId();
@@ -28,7 +29,7 @@
         chrome.storage.sync.get('rulesText'),
         cachedSpaceId(),
       ]);
-      const response = await NotionTweaksApi.loadNotifications(currentSpaceId, size);
+      const response = await NotionTweaksApi.loadNotifications(currentSpaceId, size, inboxType);
       if (loadId !== latestLoadId) {
         return;
       }
@@ -64,6 +65,13 @@
       size += PAGE_SIZE;
       refresh();
     },
+    onFilter(nextType) {
+      inboxType = nextType;
+      chrome.storage.local.set({ inboxType });
+      size = PAGE_SIZE;
+      view = LOADING;
+      refresh();
+    },
     async onArchive(notificationIds, groupName) {
       notificationIds.forEach((id) => archivedIds.add(id));
       view = {
@@ -94,6 +102,14 @@
     },
   };
 
+  async function openPanel() {
+    size = PAGE_SIZE;
+    NotionTweaksPanel.open();
+    const stored = await chrome.storage.local.get('inboxType');
+    inboxType = stored.inboxType ?? inboxType;
+    refresh();
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message !== TOGGLE_PANEL) {
       return;
@@ -103,8 +119,6 @@
       NotionTweaksPanel.close();
       return;
     }
-    size = PAGE_SIZE;
-    NotionTweaksPanel.open();
-    refresh();
+    openPanel();
   });
 })();

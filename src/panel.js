@@ -4,6 +4,10 @@ const NotionTweaksPanel = (() => {
   const MINUTE_MS = 60_000;
   const HOUR_MS = 60 * MINUTE_MS;
   const DAY_MS = 24 * HOUR_MS;
+  const FILTER_OPTIONS = [
+    { value: NotionTweaksApi.INBOX_TYPE.ALL, label: 'All' },
+    { value: NotionTweaksApi.INBOX_TYPE.UNREAD, label: 'Unread' },
+  ];
   const collapsedGroups = new Set();
 
   const STYLE = `
@@ -31,11 +35,10 @@ const NotionTweaksPanel = (() => {
     li:hover .archive-item, .archive-item:focus-visible { opacity: 1; }
     li.archived a, li.archived small, li.archived .archive-item { opacity: 0.4; }
     .archive-item:disabled { cursor: default; }
-    .updating { font-size: 12px; opacity: 0.6; }
     a { color: inherit; text-decoration: none; }
     a:hover { text-decoration: underline; }
     small { display: block; font-size: 12px; opacity: 0.6; }
-    button {
+    button, select {
       font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer;
       color: inherit; background: transparent; border-radius: 4px;
       border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
@@ -169,7 +172,18 @@ const NotionTweaksPanel = (() => {
       loadMore.addEventListener('click', handlers.onLoadMore);
       sections.push(loadMore);
     }
-    return sections.length ? sections : [el('p', { textContent: 'The inbox is empty.' })];
+    return sections.length ? sections : [el('p', { textContent: 'No notifications.' })];
+  }
+
+  function filterSelect(inboxType, onFilter) {
+    const select = el(
+      'select',
+      { ariaLabel: 'Status' },
+      ...FILTER_OPTIONS.map(({ value, label }) => el('option', { value, textContent: label })),
+    );
+    select.value = inboxType;
+    select.addEventListener('change', () => onFilter(select.value));
+    return select;
   }
 
   function shadowRoot() {
@@ -204,8 +218,8 @@ const NotionTweaksPanel = (() => {
       el(
         'header',
         {},
-        el('strong', { textContent: 'Inbox groups' }),
-        el('span', { className: 'updating', textContent: view.refreshing ? 'Updating…' : '' }),
+        el('strong', { textContent: view.refreshing ? 'Updating…' : 'Inbox groups' }),
+        filterSelect(view.inboxType, handlers.onFilter),
         reload,
         closeButton,
       ),

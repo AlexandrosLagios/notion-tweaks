@@ -1,6 +1,9 @@
 const NotionTweaksApi = (() => {
   const ACTIVE_USER_COOKIE = 'notion_user_id';
-  const INBOX_TYPE = 'unread_and_read';
+  const INBOX_TYPE = {
+    ALL: 'unread_and_read',
+    UNREAD: 'unread_only',
+  };
 
   class NotionApiError extends Error {
     constructor(endpoint, detail) {
@@ -45,11 +48,11 @@ const NotionTweaksApi = (() => {
     return spaceId;
   }
 
-  async function loadNotifications(spaceId, size) {
+  async function loadNotifications(spaceId, size, type) {
     const response = await post('getNotificationLog', {
       spaceId,
       size,
-      type: INBOX_TYPE,
+      type,
       supportsConnectorInstallApprovedNotifications: true,
     });
     if (!Array.isArray(response.notificationIds) || !response.recordMap) {
@@ -90,5 +93,5 @@ const NotionTweaksApi = (() => {
     return updateNotifications(spaceId, [notificationId], { read: true });
   }
 
-  return { activeUserId, findSpaceId, loadNotifications, archiveNotifications, markNotificationRead };
+  return { INBOX_TYPE, activeUserId, findSpaceId, loadNotifications, archiveNotifications, markNotificationRead };
 })();

@@ -27,6 +27,7 @@ Copy the database URL from the address bar of the full-page database. The option
 3. To archive one notification, point to the row, and select "Archive".
 4. To archive a group, select "Archive" in the group header, and then select "Archive <count>?" within 3 seconds.
 5. To open a notification, select the row. The extension marks the notification as read.
+6. To show only the unread notifications, select "Unread" in the header. The panel keeps the selection.
 
 An archived row dims at once and stays in place, so the other rows do not move under the pointer. "Reload" removes the archived rows. When Notion rejects the archive, the row returns and an error line shows below the group header.
 
