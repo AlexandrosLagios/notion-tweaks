@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Notion Tweaks",
+  "version": "0.1.0",
+  "description": "Groups the Notion inbox by parent database.",
+  "permissions": ["storage"],
+  "background": { "service_worker": "src/background.js" },
+  "action": { "default_title": "Notion inbox groups" },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://app.notion.com/*"],
+      "js": ["src/grouping.js", "src/notion-api.js", "src/panel.js", "src/content.js"]
+    }
+  ]
+}
