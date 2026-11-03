@@ -9,7 +9,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     await chrome.tabs.sendMessage(tab.id, TOGGLE_PANEL);
   } catch {
-    // A tab opened before the extension loaded has no content script yet.
+    // This is the only injection path: Chrome freezes manifest content scripts at the last extension reload.
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_SCRIPTS });
     await chrome.tabs.sendMessage(tab.id, TOGGLE_PANEL);
   }

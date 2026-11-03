@@ -10,7 +10,7 @@ The extension adds a panel to the Notion web app at `https://app.notion.com`. Th
 2. Turn on "Developer mode".
 3. Select "Load unpacked", and select this directory.
 
-After a code change, select the reload icon of the extension on `chrome://extensions`.
+After a change to `manifest.json` or `src/background.js`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, reload the Notion tab. The toolbar click reads the panel scripts from disk.
 
 ## Configure the groups
 

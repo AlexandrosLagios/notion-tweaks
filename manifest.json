@@ -6,11 +6,5 @@
   "permissions": ["storage", "activeTab", "scripting"],
   "background": { "service_worker": "src/background.js" },
   "action": { "default_title": "Notion inbox groups" },
-  "options_page": "options.html",
-  "content_scripts": [
-    {
-      "matches": ["https://app.notion.com/*"],
-      "js": ["src/grouping.js", "src/notion-api.js", "src/panel.js", "src/content.js"]
-    }
-  ]
+  "options_page": "options.html"
 }
