@@ -9,8 +9,18 @@
   let size = PAGE_SIZE;
   let view = LOADING;
   let inboxType = NotionTweaksApi.INBOX_TYPE.ALL;
+  let unreadCount;
 
-  const render = () => NotionTweaksPanel.render({ ...view, inboxType }, handlers);
+  const render = () => NotionTweaksPanel.render({ ...view, inboxType, unreadCount }, handlers);
+
+  function refreshUnreadCount(forSpaceId) {
+    NotionTweaksApi.loadUnreadCount(forSpaceId)
+      .then((count) => {
+        unreadCount = count;
+        NotionTweaksPanel.showUnreadCount(count);
+      })
+      .catch(console.error);
+  }
 
   async function cachedSpaceId() {
     const userId = NotionTweaksApi.activeUserId();
@@ -29,6 +39,7 @@
         chrome.storage.sync.get('rulesText'),
         cachedSpaceId(),
       ]);
+      refreshUnreadCount(currentSpaceId);
       const response = await NotionTweaksApi.loadNotifications(currentSpaceId, size, inboxType);
       if (loadId !== latestLoadId) {
         return;
@@ -82,6 +93,7 @@
       render();
       try {
         await NotionTweaksApi.archiveNotifications(spaceId, notificationIds);
+        refreshUnreadCount(spaceId);
       } catch (error) {
         notificationIds.forEach((id) => archivedIds.delete(id));
         view = {
@@ -98,7 +110,9 @@
       }
       view = { ...view, groups: NotionTweaksGrouping.markRead(view.groups, item.id) };
       render();
-      NotionTweaksApi.markNotificationRead(spaceId, item.id).catch(console.error);
+      NotionTweaksApi.markNotificationRead(spaceId, item.id)
+        .then(() => refreshUnreadCount(spaceId))
+        .catch(console.error);
     },
   };
 

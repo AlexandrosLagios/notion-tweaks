@@ -21,7 +21,8 @@ const NotionTweaksPanel = (() => {
       box-shadow: -4px 0 16px rgb(0 0 0 / 0.2);
     }
     header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    header strong { flex: 1; font-size: 15px; }
+    header strong { flex: 1; font-size: 15px; white-space: nowrap; }
+    .badge { margin-left: 6px; padding: 1px 6px; border-radius: 9px; font-size: 11px; color: #fff; background: #2383e2; }
     summary { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; font-weight: 600; }
     summary::before { content: '▸'; opacity: 0.6; }
     details[open] > summary::before { content: '▾'; }
@@ -218,7 +219,17 @@ const NotionTweaksPanel = (() => {
       el(
         'header',
         {},
-        el('strong', { textContent: view.refreshing ? 'Updating…' : 'Inbox groups' }),
+        el(
+          'strong',
+          {},
+          view.refreshing ? 'Updating…' : 'Inbox',
+          el('span', {
+            className: 'badge',
+            title: 'Unread notifications',
+            textContent: view.unreadCount,
+            hidden: !view.unreadCount,
+          }),
+        ),
         filterSelect(view.inboxType, handlers.onFilter),
         reload,
         closeButton,
@@ -229,5 +240,14 @@ const NotionTweaksPanel = (() => {
     panel.scrollTop = scrollTop;
   }
 
-  return { open, close, isOpen: () => Boolean(shadowRoot()), render };
+  // Updates only the badge: a full render during a click would replace the button under the pointer and lose the click.
+  function showUnreadCount(count) {
+    const badge = shadowRoot()?.querySelector('.badge');
+    if (badge) {
+      badge.textContent = count;
+      badge.hidden = !count;
+    }
+  }
+
+  return { open, close, isOpen: () => Boolean(shadowRoot()), render, showUnreadCount };
 })();

@@ -29,6 +29,8 @@ Copy the database URL from the address bar of the full-page database. The option
 5. To open a notification, select the row. The extension marks the notification as read.
 6. To show only the unread notifications, select "Unread" in the header. The panel keeps the selection.
 
+The badge next to the title shows the number of unread notifications. The badge loads separately, so the list does not wait for the badge.
+
 An archived row dims at once and stays in place, so the other rows do not move under the pointer. "Reload" removes the archived rows. When Notion rejects the archive, the row returns and an error line shows below the group header.
 
 The extension has no undo for an archive.

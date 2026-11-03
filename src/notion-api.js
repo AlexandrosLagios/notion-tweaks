@@ -4,6 +4,7 @@ const NotionTweaksApi = (() => {
     ALL: 'unread_and_read',
     UNREAD: 'unread_only',
   };
+  const UNREAD_COUNT_REQUEST_SIZE = 20;
 
   class NotionApiError extends Error {
     constructor(endpoint, detail) {
@@ -61,6 +62,12 @@ const NotionTweaksApi = (() => {
     return response;
   }
 
+  async function loadUnreadCount(spaceId) {
+    const { results } = await post('getUserNotificationsInitial', { spaceId, size: UNREAD_COUNT_REQUEST_SIZE });
+    // ponytail: only `mentions` moved in the probe, for all four notification types; add the other counts if the badge falls short.
+    return results[0].unread.mentions;
+  }
+
   function updateNotifications(spaceId, notificationIds, args) {
     return post(
       'saveTransactionsMain',
@@ -93,5 +100,13 @@ const NotionTweaksApi = (() => {
     return updateNotifications(spaceId, [notificationId], { read: true });
   }
 
-  return { INBOX_TYPE, activeUserId, findSpaceId, loadNotifications, archiveNotifications, markNotificationRead };
+  return {
+    INBOX_TYPE,
+    activeUserId,
+    findSpaceId,
+    loadNotifications,
+    loadUnreadCount,
+    archiveNotifications,
+    markNotificationRead,
+  };
 })();
