@@ -1,7 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseRules, resolveDatabaseId, groupNotifications, withoutNotifications } = require('../src/grouping.js');
+const { parseRules, resolveDatabaseId, groupNotifications, markArchived, markRead } = require('../src/grouping.js');
 const log = require('./fixtures/notification-log.json');
+
+const B1 = 'b1000000-0000-4000-8000-000000000001';
+const B4 = 'b4000000-0000-4000-8000-000000000004';
 
 const TASKS_ONE = '11111111111141118111111111111111';
 const TASKS_TWO = '22222222222242228222222222222222';
@@ -142,14 +145,34 @@ test('groupNotifications leaves the actors empty when the notification has no ac
   assert.deepEqual(sprint.actors, []);
 });
 
-test('withoutNotifications removes the items and recounts the unread notifications', () => {
-  const groups = withoutNotifications(groupsFor(RULES_TEXT), ['b1000000-0000-4000-8000-000000000001']);
-  assert.deepEqual([itemIds(groups[0]), groups[0].unread], [['b7', 'b2'], 0]);
+test('groupNotifications lists every notification of a group as active', () => {
+  assert.deepEqual(groupsFor(RULES_TEXT)[1].activeIds, [B4]);
 });
 
-test('withoutNotifications drops a group that becomes empty', () => {
-  const groups = withoutNotifications(groupsFor(RULES_TEXT), ['b4000000-0000-4000-8000-000000000004']);
-  assert.deepEqual(groups.map((group) => group.name), ['Engineering', 'Tasks', 'Other']);
+test('markArchived keeps the row in place, flags it, and recounts the group', () => {
+  const [group] = markArchived(groupsFor(RULES_TEXT), new Set([B1]));
+  assert.deepEqual(itemIds(group), ['b7', 'b2', 'b1']);
+  assert.deepEqual(group.items.map((item) => item.archived), [false, false, true]);
+  assert.equal(group.unread, 0);
+  assert.equal(group.activeIds.includes(B1), false);
+  assert.equal(group.activeIds.length, 2);
+});
+
+test('markArchived restores a row when its id leaves the set', () => {
+  const [group] = markArchived(markArchived(groupsFor(RULES_TEXT), new Set([B1])), new Set());
+  assert.deepEqual([group.items[2].archived, group.unread, group.activeIds.length], [false, 1, 3]);
+});
+
+test('markArchived keeps a group whose rows are all archived', () => {
+  const groups = markArchived(groupsFor(RULES_TEXT), new Set([B4]));
+  assert.deepEqual(groups.map((group) => group.name), ['Engineering', 'Planning', 'Tasks', 'Other']);
+  assert.deepEqual(groups[1].activeIds, []);
+});
+
+test('markRead clears the unread state of one row and recounts only its group', () => {
+  const groups = markRead(groupsFor(RULES_TEXT), B1);
+  assert.equal(groups[0].items[2].unread, false);
+  assert.deepEqual(groups.map((group) => group.unread), [0, 1, 0, 1]);
 });
 
 test('groupNotifications joins the rich-text parts of a title', () => {

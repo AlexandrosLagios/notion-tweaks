@@ -2,6 +2,7 @@
   const TOGGLE_PANEL = 'toggle-panel';
   const PAGE_SIZE = 100;
   const LOADING = { status: 'loading' };
+  const archivedIds = new Set();
 
   let spaceId;
   let latestLoadId = 0;
@@ -34,7 +35,10 @@
       spaceId = currentSpaceId;
       view = {
         status: 'ready',
-        groups: NotionTweaksGrouping.groupNotifications(response, NotionTweaksGrouping.parseRules(rulesText).rules),
+        groups: NotionTweaksGrouping.markArchived(
+          NotionTweaksGrouping.groupNotifications(response, NotionTweaksGrouping.parseRules(rulesText).rules),
+          archivedIds,
+        ),
         canLoadMore: response.notificationIds.length >= size,
         groupErrors: {},
       };
@@ -61,13 +65,32 @@
       refresh();
     },
     async onArchive(notificationIds, groupName) {
+      notificationIds.forEach((id) => archivedIds.add(id));
+      view = {
+        ...view,
+        groups: NotionTweaksGrouping.markArchived(view.groups, archivedIds),
+        groupErrors: { ...view.groupErrors, [groupName]: undefined },
+      };
+      render();
       try {
         await NotionTweaksApi.archiveNotifications(spaceId, notificationIds);
-        view = { ...view, groups: NotionTweaksGrouping.withoutNotifications(view.groups, notificationIds) };
       } catch (error) {
-        view = { ...view, groupErrors: { ...view.groupErrors, [groupName]: error.message } };
+        notificationIds.forEach((id) => archivedIds.delete(id));
+        view = {
+          ...view,
+          groups: NotionTweaksGrouping.markArchived(view.groups, archivedIds),
+          groupErrors: { ...view.groupErrors, [groupName]: error.message },
+        };
+        render();
       }
+    },
+    onOpen(item) {
+      if (!item.unread) {
+        return;
+      }
+      view = { ...view, groups: NotionTweaksGrouping.markRead(view.groups, item.id) };
       render();
+      NotionTweaksApi.markNotificationRead(spaceId, item.id).catch(console.error);
     },
   };
 

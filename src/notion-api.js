@@ -14,11 +14,12 @@ const NotionTweaksApi = (() => {
     }
   }
 
-  async function post(endpoint, body) {
+  async function post(endpoint, body, options) {
     const response = await fetch(`${location.origin}/api/v3/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      ...options,
     });
     if (!response.ok) {
       throw new NotionApiError(endpoint, `HTTP ${response.status}`);
@@ -57,24 +58,37 @@ const NotionTweaksApi = (() => {
     return response;
   }
 
-  async function archiveNotifications(spaceId, notificationIds) {
-    const archivedAt = Date.now();
-    await post('saveTransactionsMain', {
-      requestId: crypto.randomUUID(),
-      transactions: [
-        {
-          id: crypto.randomUUID(),
-          spaceId,
-          operations: notificationIds.map((id) => ({
-            pointer: { table: 'notification', id, spaceId },
-            path: [],
-            args: { archived_at: archivedAt, read: true, visited: true },
-            command: 'update',
-          })),
-        },
-      ],
-    });
+  function updateNotifications(spaceId, notificationIds, args) {
+    return post(
+      'saveTransactionsMain',
+      {
+        requestId: crypto.randomUUID(),
+        transactions: [
+          {
+            id: crypto.randomUUID(),
+            spaceId,
+            operations: notificationIds.map((id) => ({
+              pointer: { table: 'notification', id, spaceId },
+              path: [],
+              args,
+              command: 'update',
+            })),
+          },
+        ],
+      },
+      // A write takes about 1.6 s, and a click on a row can leave the page first.
+      // ponytail: keepalive caps the body at 64 KB, about 380 rows; split the request if a group gets that large.
+      { keepalive: true },
+    );
   }
 
-  return { activeUserId, findSpaceId, loadNotifications, archiveNotifications };
+  function archiveNotifications(spaceId, notificationIds) {
+    return updateNotifications(spaceId, notificationIds, { archived_at: Date.now(), read: true, visited: true });
+  }
+
+  function markNotificationRead(spaceId, notificationId) {
+    return updateNotifications(spaceId, [notificationId], { read: true });
+  }
+
+  return { activeUserId, findSpaceId, loadNotifications, archiveNotifications, markNotificationRead };
 })();

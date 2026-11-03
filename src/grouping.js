@@ -111,8 +111,16 @@ const NotionTweaksGrouping = (() => {
   }
 
   function summarize(name, items) {
-    return { name, unread: items.filter((item) => item.unread).length, items };
+    const active = items.filter((item) => !item.archived);
+    return {
+      name,
+      unread: active.filter((item) => item.unread).length,
+      activeIds: active.map((item) => item.id),
+      items,
+    };
   }
+
+  const mapItems = (groups, change) => groups.map((group) => summarize(group.name, group.items.map(change)));
 
   function groupNotifications({ notificationIds, recordMap }, rules) {
     const itemsByGroup = new Map();
@@ -152,14 +160,15 @@ const NotionTweaksGrouping = (() => {
       });
   }
 
-  function withoutNotifications(groups, notificationIds) {
-    const removed = new Set(notificationIds);
-    return groups
-      .map((group) => summarize(group.name, group.items.filter((item) => !removed.has(item.id))))
-      .filter((group) => group.items.length > 0);
+  function markArchived(groups, archivedIds) {
+    return mapItems(groups, (item) => ({ ...item, archived: archivedIds.has(item.id) }));
   }
 
-  return { parseRules, resolveDatabaseId, groupNotifications, withoutNotifications };
+  function markRead(groups, notificationId) {
+    return mapItems(groups, (item) => (item.id === notificationId ? { ...item, unread: false } : item));
+  }
+
+  return { parseRules, resolveDatabaseId, groupNotifications, markArchived, markRead };
 })();
 
 if (typeof module !== 'undefined') {
