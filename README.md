@@ -1,2 +1,2 @@
-# notion-inbox-groups
-Chrome extension that groups the Notion inbox by parent database
+# notion-tweaks
+Chrome extension with tweaks for notion.so, starting with inbox grouping by parent database
