@@ -21,15 +21,14 @@ Copy each field below into the Chrome Developer Dashboard. Upload the ZIP from `
 **Description:**
 
 ```text
-Clear your Notion inbox faster, in a side panel that stays open while you read.
+Sort your Notion inbox into groups, flag what needs your action, and clear the rest.
 
 - Group notifications by database, or by your own rules.
-- Flag what needs your action. Flagged rows stay at the top until you are done.
-- Open a notification in place. The page opens without a reload and goes to the comment.
-- See who acted and what they wrote, without opening the page.
+- Flag what needs your action. Flagged rows stay at the top until you are done, even when you show only unread notifications.
 - Get one row per page, even when a page has many notifications.
-- Archive at once, with Undo. The list does not move under your pointer.
-- Show all notifications or only unread ones, with an unread count.
+- Archive a row or a whole group, with Undo right in the row.
+- Keep your place. The list does not move under your pointer when you archive.
+- Keep the inbox in a Chrome side panel, next to any tab, at the width you choose.
 
 Your data stays in your browser. The extension talks only to Notion, with your existing session. It has no server, no analytics, and no tracking.
 
