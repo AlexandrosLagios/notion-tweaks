@@ -42,16 +42,35 @@ const NotionTweaksPanel = (() => {
     return [actorText(item.actors), item.verbs.join(', ')].filter(Boolean).join(' ');
   }
 
-  // The second click of a double click on "Archive" lands on "Undo".
+  // After the first click of a double click, the row under the pointer can change, so the second click does nothing.
   const isRepeatClick = (event) => event.detail > 1;
 
   function rowAction(item, groupName, { onArchive, onUnarchive }) {
-    const button = el('button', { className: 'archive-item', textContent: item.archived ? 'Undo' : 'Archive' });
+    const button = el('button', { textContent: item.archived ? 'Undo' : 'Archive' });
     button.addEventListener('click', (event) => {
-      if (!item.archived) {
-        onArchive(item.ids, groupName);
-      } else if (!isRepeatClick(event)) {
+      if (isRepeatClick(event)) {
+        return;
+      }
+      if (item.archived) {
         onUnarchive([item], groupName);
+      } else {
+        onArchive([item], groupName);
+      }
+    });
+    return button;
+  }
+
+  function flagAction(item, groupName, { onFlag, onUnflag }) {
+    const isFlagged = groupName === NotionTweaksGrouping.ACTION_NEEDED_GROUP;
+    const button = el('button', { textContent: isFlagged ? 'Unflag' : 'Flag' });
+    button.addEventListener('click', (event) => {
+      if (isRepeatClick(event)) {
+        return;
+      }
+      if (isFlagged) {
+        onUnflag(item);
+      } else {
+        onFlag(item);
       }
     });
     return button;
@@ -64,6 +83,10 @@ const NotionTweaksPanel = (() => {
       textContent: item.title,
     });
     link.addEventListener('click', (event) => {
+      if (isRepeatClick(event)) {
+        event.preventDefault();
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.shiftKey) {
         onRead(item, groupName);
         return;
@@ -85,15 +108,19 @@ const NotionTweaksPanel = (() => {
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (isRepeatClick(event)) {
+        return;
+      }
       if (!group.activeCount) {
-        if (!isRepeatClick(event)) {
-          onUnarchive(group.items, group.name);
-        }
+        onUnarchive(group.items, group.name);
         return;
       }
       if (confirmTimer) {
         clearTimeout(confirmTimer);
-        onArchive(group.activeIds, group.name);
+        onArchive(
+          group.items.filter((item) => !item.archived),
+          group.name,
+        );
         return;
       }
       button.textContent = `Archive ${group.activeCount}?`;
@@ -120,7 +147,12 @@ const NotionTweaksPanel = (() => {
         { className: 'row' },
         rowLink(item, groupName, handlers),
         el('span', { className: 'age', textContent: age(item.endTime) }),
-        rowAction(item, groupName, handlers),
+        el(
+          'div',
+          { className: 'row-actions' },
+          rowAction(item, groupName, handlers),
+          ...(item.archived ? [] : [flagAction(item, groupName, handlers)]),
+        ),
       ),
       el('small', { textContent: sentence(item) }),
       ...preview,
@@ -130,7 +162,10 @@ const NotionTweaksPanel = (() => {
   function groupSection(group, view, handlers) {
     const details = el(
       'details',
-      { open: !collapsedGroups.has(group.name) },
+      {
+        open: !collapsedGroups.has(group.name),
+        className: group.name === NotionTweaksGrouping.ACTION_NEEDED_GROUP ? 'action-needed' : '',
+      },
       el(
         'summary',
         {},

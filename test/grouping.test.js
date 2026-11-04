@@ -1,6 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseRules, resolveDatabaseId, groupNotifications, markArchived, withUnreadIds } = require('../src/grouping.js');
+const {
+  ACTION_NEEDED_GROUP,
+  parseRules,
+  resolveDatabaseId,
+  groupNotifications,
+  moveRow,
+  markArchived,
+  withUnreadIds,
+} = require('../src/grouping.js');
 const log = require('./fixtures/notification-log.json');
 
 const B1 = 'b1000000-0000-4000-8000-000000000001';
@@ -20,7 +28,10 @@ const RULES_TEXT = [
 ].join('\n');
 
 const notification = (id) => log.recordMap.notification[id].value.value;
-const groupsFor = (rulesText) => groupNotifications(log, parseRules(rulesText).rules);
+const groupsFor = (rulesText, flaggedRows = {}) => groupNotifications(log, parseRules(rulesText).rules, flaggedRows);
+const groupNames = (groups) => groups.map((group) => group.name);
+const fixLoginRow = () => groupsFor(RULES_TEXT)[0].items[0];
+const flagged = (row) => ({ [row.pageKey]: row });
 const itemIds = (group) => group.items.map((item) => item.id.slice(0, 2));
 
 test('parseRules takes the database id from the URL path, not the view id in the query', () => {
@@ -129,6 +140,8 @@ test('groupNotifications leaves out a group without notifications', () => {
 test('groupNotifications describes each row for the panel', () => {
   assert.deepEqual(groupsFor(RULES_TEXT)[0].items[0], {
     id: B7,
+    pageKey: 'a1000000-0000-4000-8000-000000000001',
+    homeGroup: 'Engineering',
     ids: [B7, B1],
     unreadIds: [B1],
     path: '/p/a1000000000040008000000000000001?d=d1a00000000040008000000000000001',
@@ -175,28 +188,76 @@ test('groupNotifications leaves the actors empty when the notification has no ac
   assert.deepEqual(sprint.actors, []);
 });
 
-test('groupNotifications lists every notification of a group as active', () => {
-  assert.deepEqual(groupsFor(RULES_TEXT)[1].activeIds, [B4]);
-});
-
 test('markArchived keeps the row in place, flags it, and recounts the group', () => {
   const [group] = markArchived(groupsFor(RULES_TEXT), new Set([B7, B1]));
   assert.deepEqual(itemIds(group), ['b7', 'b2']);
   assert.deepEqual(group.items.map((item) => item.archived), [true, false]);
   assert.equal(group.unread, 0);
-  assert.deepEqual(group.activeIds, [B2]);
   assert.equal(group.activeCount, 1);
 });
 
 test('markArchived restores a row when its ids leave the set', () => {
   const [group] = markArchived(markArchived(groupsFor(RULES_TEXT), new Set([B7, B1])), new Set());
-  assert.deepEqual([group.items[0].archived, group.unread, group.activeIds], [false, 1, [B7, B1, B2]]);
+  assert.deepEqual([group.items[0].archived, group.unread, group.activeCount], [false, 1, 2]);
 });
 
 test('markArchived keeps a group whose rows are all archived', () => {
   const groups = markArchived(groupsFor(RULES_TEXT), new Set([B4]));
   assert.deepEqual(groups.map((group) => group.name), ['Engineering', 'Planning', 'Tasks', 'Other']);
-  assert.deepEqual(groups[1].activeIds, []);
+  assert.equal(groups[1].activeCount, 0);
+});
+
+test('groupNotifications puts a flagged page in Action needed, before every other group', () => {
+  const groups = groupsFor(RULES_TEXT, flagged(fixLoginRow()));
+  assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Planning', 'Tasks', 'Other']);
+  assert.deepEqual(itemIds(groups[0]), ['b7']);
+  assert.deepEqual(itemIds(groups[1]), ['b2']);
+});
+
+test('groupNotifications keeps a flagged row that the response does not hold', () => {
+  const stored = fixLoginRow();
+  const [section] = groupNotifications({ notificationIds: [], recordMap: {} }, [], flagged(stored));
+  assert.equal(section.name, ACTION_NEEDED_GROUP);
+  assert.deepEqual(section.items, [stored]);
+});
+
+test('groupNotifications updates a flagged row and keeps the notifications that the response does not hold', () => {
+  const older = 'older-notification';
+  const stored = { ...fixLoginRow(), title: 'Old title', ids: [older], unreadIds: [older] };
+  const [row] = groupsFor(RULES_TEXT, flagged(stored))[0].items;
+  assert.equal(row.title, 'Fix login');
+  assert.deepEqual(row.ids, [B7, B1, older]);
+  assert.deepEqual(row.unreadIds, [B1, older]);
+});
+
+test('groupNotifications keeps the usual group of a flagged row', () => {
+  const [row] = groupsFor(RULES_TEXT, flagged(fixLoginRow()))[0].items;
+  assert.equal(row.homeGroup, 'Engineering');
+});
+
+test('moveRow moves a row to Action needed and recounts both groups', () => {
+  const groups = moveRow(groupsFor(RULES_TEXT), B7, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Planning', 'Tasks', 'Other']);
+  assert.deepEqual([groups[0].unread, groups[1].unread], [1, 0]);
+});
+
+test('moveRow drops a group that becomes empty', () => {
+  const groups = moveRow(groupsFor(RULES_TEXT), B4, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Tasks', 'Other']);
+});
+
+test('moveRow returns a row to its usual group in rule order and date order', () => {
+  const rules = parseRules(RULES_TEXT).rules;
+  const original = groupsFor(RULES_TEXT);
+  const moved = moveRow(original, B7, ACTION_NEEDED_GROUP, rules);
+  const returned = moveRow(moved, B7, 'Engineering', rules);
+  assert.deepEqual(groupNames(returned), groupNames(original));
+  assert.deepEqual(itemIds(returned[0]), ['b7', 'b2']);
+});
+
+test('moveRow to the current group keeps one copy of the row', () => {
+  const groups = moveRow(groupsFor(RULES_TEXT), B7, 'Engineering', parseRules(RULES_TEXT).rules);
+  assert.deepEqual(itemIds(groups[0]), ['b7', 'b2']);
 });
 
 test('withUnreadIds clears the unread notifications of one row and recounts only its group', () => {
@@ -215,6 +276,7 @@ test('groupNotifications gives each notification without a page its own row in O
   const [other] = groupNotifications(
     { notificationIds: ['x1', 'x2'], recordMap: { notification: { x1: entry('x1'), x2: entry('x2') } } },
     [],
+    {},
   );
   assert.equal(other.name, 'Other');
   assert.deepEqual(other.items.map((item) => [item.id, item.path]), [['x1', '/'], ['x2', '/']]);

@@ -29,6 +29,10 @@ Copy the database URL from the address bar of the full-page database. The option
 5. To archive a group, select "Archive" in the group header, and then select "Archive <count>?" within 3 seconds.
 6. To show only the unread notifications, select "Unread" in the header. The panel keeps the selection.
 
+To collect the notifications that need your action, point to a row, and select "Flag". The row moves to the "Action needed" section at the top. A new comment on a flagged page joins the flagged row. To remove the flag, select "Unflag", or archive the row.
+
+The section shows under both filters, and also when the row is older than the loaded list, because the extension saves a copy of each flagged row in `chrome.storage.local`. A flag exists only in this Chrome profile. A notification that you archive in the native Notion inbox stays in the section until you select "Unflag".
+
 A row holds all the notifications of one page. The row shows who acted and the text of the newest comment. "Archive" applies to all the notifications of the row.
 
 An archived row dims at once and stays in place, so the other rows do not move under the pointer. "Undo" restores the row and its read state. "Reload" removes the archived rows. When Notion rejects a request, the row returns to the earlier state and an error line shows below the group header.

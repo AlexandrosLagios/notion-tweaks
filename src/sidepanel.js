@@ -12,6 +12,8 @@
   let inboxType = NotionTweaksApi.INBOX_TYPE.ALL;
   let unreadCount;
   let currentId;
+  let rules = [];
+  let flaggedRows = {};
 
   const render = () => NotionTweaksPanel.render({ ...view, inboxType, unreadCount, currentId }, handlers);
 
@@ -30,6 +32,17 @@
         NotionTweaksPanel.showUnreadCount(count);
       })
       .catch(console.error);
+  }
+
+  // ponytail: one panel writes the flags; read them before each write if two windows ever overwrite each other.
+  function saveFlaggedRows() {
+    const section = view.groups?.find((group) => group.name === NotionTweaksGrouping.ACTION_NEEDED_GROUP);
+    for (const item of section?.items ?? []) {
+      if (flaggedRows[item.pageKey]) {
+        flaggedRows[item.pageKey] = item;
+      }
+    }
+    chrome.storage.local.set({ flaggedRows }).catch(console.error);
   }
 
   async function cachedSpaceId() {
@@ -55,15 +68,17 @@
         return;
       }
       spaceId = currentSpaceId;
+      rules = NotionTweaksGrouping.parseRules(rulesText).rules;
       view = {
         status: 'ready',
         groups: NotionTweaksGrouping.markArchived(
-          NotionTweaksGrouping.groupNotifications(response, NotionTweaksGrouping.parseRules(rulesText).rules),
+          NotionTweaksGrouping.groupNotifications(response, rules, flaggedRows),
           archivedIds,
         ),
         canLoadMore: response.notificationIds.length >= size,
         groupErrors: {},
       };
+      saveFlaggedRows();
     } catch (error) {
       await chrome.storage.local.remove('spaceIds');
       if (loadId !== latestLoadId) {
@@ -81,20 +96,31 @@
   }
 
   function showRowChange(changeGroups, groupName, error) {
-    if (view.status !== 'ready') {
-      return;
+    if (view.status === 'ready') {
+      view = {
+        ...view,
+        groups: changeGroups(view.groups),
+        groupErrors: { ...view.groupErrors, [groupName]: error },
+      };
+      render();
     }
-    view = {
-      ...view,
-      groups: changeGroups(view.groups),
-      groupErrors: { ...view.groupErrors, [groupName]: error },
-    };
-    render();
+    saveFlaggedRows();
   }
 
-  async function changeArchivedState(notificationIds, groupName, archive, write) {
-    const apply = (archived) =>
+  async function changeArchivedState(items, groupName, archive, write) {
+    const notificationIds = items.flatMap((item) => item.ids);
+    const apply = (archived) => {
       notificationIds.forEach((id) => (archived ? archivedIds.add(id) : archivedIds.delete(id)));
+      if (groupName === NotionTweaksGrouping.ACTION_NEEDED_GROUP) {
+        items.forEach((item) => {
+          if (archived) {
+            delete flaggedRows[item.pageKey];
+          } else {
+            flaggedRows[item.pageKey] = item;
+          }
+        });
+      }
+    };
     const showArchivedState = (error) =>
       showRowChange((groups) => NotionTweaksGrouping.markArchived(groups, archivedIds), groupName, error);
     apply(archive);
@@ -122,17 +148,31 @@
       render();
       load();
     },
-    onArchive(notificationIds, groupName) {
-      changeArchivedState(notificationIds, groupName, true, () =>
-        NotionTweaksApi.archiveNotifications(spaceId, notificationIds),
+    onArchive(items, groupName) {
+      changeArchivedState(items, groupName, true, () =>
+        NotionTweaksApi.archiveNotifications(
+          spaceId,
+          items.flatMap((item) => item.ids),
+        ),
       );
     },
     onUnarchive(items, groupName) {
-      const notificationIds = items.flatMap((item) => item.ids);
-      const unreadIds = items.flatMap((item) => item.unreadIds);
-      changeArchivedState(notificationIds, groupName, false, () =>
-        NotionTweaksApi.restoreNotifications(spaceId, notificationIds, unreadIds),
+      changeArchivedState(items, groupName, false, () =>
+        NotionTweaksApi.restoreNotifications(
+          spaceId,
+          items.flatMap((item) => item.ids),
+          items.flatMap((item) => item.unreadIds),
+        ),
       );
+    },
+    onFlag(item) {
+      flaggedRows[item.pageKey] = item;
+      const target = NotionTweaksGrouping.ACTION_NEEDED_GROUP;
+      showRowChange((groups) => NotionTweaksGrouping.moveRow(groups, item.id, target, rules), target);
+    },
+    onUnflag(item) {
+      delete flaggedRows[item.pageKey];
+      showRowChange((groups) => NotionTweaksGrouping.moveRow(groups, item.id, item.homeGroup, rules), item.homeGroup);
     },
     async onRead(item, groupName) {
       const { id, unreadIds } = item;
@@ -160,8 +200,9 @@
     },
   };
 
-  chrome.storage.local.get('inboxType').then((stored) => {
+  chrome.storage.local.get(['inboxType', 'flaggedRows']).then((stored) => {
     inboxType = stored.inboxType ?? inboxType;
+    flaggedRows = stored.flaggedRows ?? flaggedRows;
     refresh();
   });
 
