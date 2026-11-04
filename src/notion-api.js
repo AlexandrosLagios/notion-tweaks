@@ -1,10 +1,14 @@
 const NotionTweaksApi = (() => {
+  const NOTION_ORIGIN = 'https://app.notion.com';
   const ACTIVE_USER_COOKIE = 'notion_user_id';
   const INBOX_TYPE = {
     ALL: 'unread_and_read',
     UNREAD: 'unread_only',
   };
   const UNREAD_COUNT_REQUEST_SIZE = 20;
+  const IN_PLACE_TIMEOUT_MS = 5000;
+
+  const pageUrl = (path) => `${NOTION_ORIGIN}${path}`;
 
   class NotionApiError extends Error {
     constructor(endpoint, detail) {
@@ -19,8 +23,9 @@ const NotionTweaksApi = (() => {
   }
 
   async function post(endpoint, body, options) {
-    const response = await fetch(`${location.origin}/api/v3/${endpoint}`, {
+    const response = await fetch(`${NOTION_ORIGIN}/api/v3/${endpoint}`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       ...options,
@@ -31,9 +36,9 @@ const NotionTweaksApi = (() => {
     return response.json();
   }
 
-  function activeUserId() {
-    const cookie = document.cookie.split('; ').find((entry) => entry.startsWith(`${ACTIVE_USER_COOKIE}=`));
-    return cookie && decodeURIComponent(cookie.slice(ACTIVE_USER_COOKIE.length + 1));
+  async function activeUserId() {
+    const cookie = await chrome.cookies.get({ url: NOTION_ORIGIN, name: ACTIVE_USER_COOKIE });
+    return cookie && decodeURIComponent(cookie.value);
   }
 
   async function findSpaceId(userId) {
@@ -68,7 +73,7 @@ const NotionTweaksApi = (() => {
     return results[0].unread.mentions;
   }
 
-  function updateNotifications(spaceId, notificationIds, args) {
+  function updateNotifications(spaceId, changes) {
     return post(
       'saveTransactionsMain',
       {
@@ -77,7 +82,7 @@ const NotionTweaksApi = (() => {
           {
             id: crypto.randomUUID(),
             spaceId,
-            operations: notificationIds.map((id) => ({
+            operations: changes.map(({ id, args }) => ({
               pointer: { table: 'notification', id, spaceId },
               path: [],
               args,
@@ -86,27 +91,78 @@ const NotionTweaksApi = (() => {
           },
         ],
       },
-      // A write takes about 1.6 s, and a click on a row can leave the page first.
+      // A write takes about 1.6 s, and the side panel can close first.
       // ponytail: keepalive caps the body at 64 KB, about 380 rows; split the request if a group gets that large.
       { keepalive: true },
     );
   }
 
   function archiveNotifications(spaceId, notificationIds) {
-    return updateNotifications(spaceId, notificationIds, { archived_at: Date.now(), read: true, visited: true });
+    const args = { archived_at: Date.now(), read: true, visited: true };
+    return updateNotifications(spaceId, notificationIds.map((id) => ({ id, args })));
   }
 
-  function markNotificationRead(spaceId, notificationId) {
-    return updateNotifications(spaceId, [notificationId], { read: true });
+  function restoreNotifications(spaceId, notificationIds, unreadIds) {
+    return updateNotifications(
+      spaceId,
+      notificationIds.map((id) => ({
+        id,
+        args: { archived_at: null, visited: false, read: !unreadIds.includes(id) },
+      })),
+    );
+  }
+
+  function markNotificationsRead(spaceId, notificationIds) {
+    return updateNotifications(spaceId, notificationIds.map((id) => ({ id, args: { read: true } })));
+  }
+
+  // Runs in the main world of the Notion tab, so the function can use no outside values.
+  function navigateInPlace(url, timeoutMs) {
+    const target = new URL(url);
+    const isSamePage = location.pathname.endsWith(target.pathname.split('/').pop());
+    const titleBefore = document.title;
+    history.pushState(null, '', url);
+    dispatchEvent(new PopStateEvent('popstate', { state: null }));
+    if (!isSamePage) {
+      setTimeout(() => {
+        if (location.href === url && document.title === titleBefore) {
+          location.assign(url);
+        }
+      }, timeoutMs);
+    }
+  }
+
+  async function openPage(path) {
+    const url = pageUrl(path);
+    const tabs = await chrome.tabs.query({ url: `${NOTION_ORIGIN}/*`, currentWindow: true });
+    const tab = tabs.find((candidate) => candidate.active) ?? tabs[0];
+    if (!tab) {
+      await chrome.tabs.create({ url });
+      return;
+    }
+    await chrome.tabs.update(tab.id, { active: true });
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        func: navigateInPlace,
+        args: [url, IN_PLACE_TIMEOUT_MS],
+      });
+    } catch {
+      await chrome.tabs.update(tab.id, { url });
+    }
   }
 
   return {
     INBOX_TYPE,
+    pageUrl,
     activeUserId,
     findSpaceId,
     loadNotifications,
     loadUnreadCount,
     archiveNotifications,
-    markNotificationRead,
+    restoreNotifications,
+    markNotificationsRead,
+    openPage,
   };
 })();

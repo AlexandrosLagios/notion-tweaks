@@ -1,6 +1,6 @@
 const NotionTweaksPanel = (() => {
-  const HOST_ID = 'notion-tweaks-panel';
   const CONFIRM_MS = 3000;
+  const MIDDLE_BUTTON = 1;
   const MINUTE_MS = 60_000;
   const HOUR_MS = 60 * MINUTE_MS;
   const DAY_MS = 24 * HOUR_MS;
@@ -9,43 +9,7 @@ const NotionTweaksPanel = (() => {
     { value: NotionTweaksApi.INBOX_TYPE.UNREAD, label: 'Unread' },
   ];
   const collapsedGroups = new Set();
-
-  const STYLE = `
-    :host { all: initial; }
-    .panel {
-      position: fixed; top: 0; right: 0; z-index: 2147483000;
-      box-sizing: border-box; width: 380px; height: 100vh; overflow-y: auto; padding: 12px 14px;
-      font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color-scheme: light dark; background: Canvas; color: CanvasText;
-      border-left: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-      box-shadow: -4px 0 16px rgb(0 0 0 / 0.2);
-    }
-    header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    header strong { flex: 1; font-size: 15px; white-space: nowrap; }
-    .badge { margin-left: 6px; padding: 1px 6px; border-radius: 9px; font-size: 11px; color: #fff; background: #2383e2; }
-    summary { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; font-weight: 600; }
-    summary::before { content: '▸'; opacity: 0.6; }
-    details[open] > summary::before { content: '▾'; }
-    .count { flex: 1; font-size: 12px; font-weight: 400; opacity: 0.6; }
-    ul { list-style: none; margin: 0 0 8px; padding: 0; }
-    li { position: relative; padding: 6px 0 6px 14px; border-top: 1px solid color-mix(in srgb, CanvasText 8%, transparent); }
-    li.unread::before { content: ''; position: absolute; left: 2px; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: #2383e2; }
-    .row { display: flex; align-items: flex-start; gap: 8px; }
-    .row a { flex: 1; }
-    .archive-item { opacity: 0; min-width: 70px; }
-    li:hover .archive-item, .archive-item:focus-visible { opacity: 1; }
-    li.archived a, li.archived small, li.archived .archive-item { opacity: 0.4; }
-    .archive-item:disabled { cursor: default; }
-    a { color: inherit; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    small { display: block; font-size: 12px; opacity: 0.6; }
-    button, select {
-      font: inherit; font-size: 12px; padding: 2px 8px; cursor: pointer;
-      color: inherit; background: transparent; border-radius: 4px;
-      border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
-    }
-    .error { color: #e03e3e; }
-  `;
+  const root = document.getElementById('root');
 
   function el(tag, props = {}, ...children) {
     const element = Object.assign(document.createElement(tag), props);
@@ -74,34 +38,65 @@ const NotionTweaksPanel = (() => {
     return `${actors.slice(0, 2).join(', ')} +${actors.length - 2}`;
   }
 
-  function archiveItemButton(item, groupName, onArchive) {
-    const button = el('button', {
-      className: 'archive-item',
-      disabled: item.archived,
-      textContent: item.archived ? 'Archived' : 'Archive',
+  function sentence(item) {
+    return [actorText(item.actors), item.verbs.join(', ')].filter(Boolean).join(' ');
+  }
+
+  // The second click of a double click on "Archive" lands on "Undo".
+  const isRepeatClick = (event) => event.detail > 1;
+
+  function rowAction(item, groupName, { onArchive, onUnarchive }) {
+    const button = el('button', { className: 'archive-item', textContent: item.archived ? 'Undo' : 'Archive' });
+    button.addEventListener('click', (event) => {
+      if (!item.archived) {
+        onArchive(item.ids, groupName);
+      } else if (!isRepeatClick(event)) {
+        onUnarchive([item], groupName);
+      }
     });
-    button.addEventListener('click', () => onArchive([item.id], groupName));
     return button;
   }
 
-  function rowLink(item, onOpen) {
-    const link = el('a', { href: `${location.origin}/p/${item.pageId}`, textContent: item.title });
-    link.addEventListener('click', () => onOpen(item));
+  function rowLink(item, groupName, { onOpen, onRead }) {
+    const link = el('a', {
+      href: NotionTweaksApi.pageUrl(item.path),
+      target: '_blank',
+      textContent: item.title,
+    });
+    link.addEventListener('click', (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey) {
+        onRead(item, groupName);
+        return;
+      }
+      event.preventDefault();
+      onOpen(item, groupName);
+    });
+    link.addEventListener('auxclick', (event) => {
+      if (event.button === MIDDLE_BUTTON) {
+        onRead(item, groupName);
+      }
+    });
     return link;
   }
 
-  function archiveGroupButton(group, onArchive) {
-    const button = el('button', { textContent: 'Archive' });
+  function groupAction(group, { onArchive, onUnarchive }) {
+    const button = el('button', { textContent: group.activeCount ? 'Archive' : 'Undo' });
     let confirmTimer;
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (!group.activeCount) {
+        if (!isRepeatClick(event)) {
+          onUnarchive(group.items, group.name);
+        }
+        return;
+      }
       if (confirmTimer) {
         clearTimeout(confirmTimer);
         onArchive(group.activeIds, group.name);
         return;
       }
-      button.textContent = `Archive ${group.activeIds.length}?`;
+      button.textContent = `Archive ${group.activeCount}?`;
       confirmTimer = setTimeout(() => {
         confirmTimer = undefined;
         button.textContent = 'Archive';
@@ -110,8 +105,29 @@ const NotionTweaksPanel = (() => {
     return button;
   }
 
-  function groupSection(group, error, { onArchive, onOpen }) {
-    const hasActive = group.activeIds.length > 0;
+  function rowClass(item, currentId) {
+    const state = item.archived ? 'archived' : item.unreadIds.length ? 'unread' : '';
+    return `${state} ${item.id === currentId ? 'current' : ''}`.trim();
+  }
+
+  function row(item, groupName, currentId, handlers) {
+    const preview = item.preview ? [el('p', { className: 'preview', textContent: item.preview })] : [];
+    return el(
+      'li',
+      { className: rowClass(item, currentId) },
+      el(
+        'div',
+        { className: 'row' },
+        rowLink(item, groupName, handlers),
+        el('span', { className: 'age', textContent: age(item.endTime) }),
+        rowAction(item, groupName, handlers),
+      ),
+      el('small', { textContent: sentence(item) }),
+      ...preview,
+    );
+  }
+
+  function groupSection(group, view, handlers) {
     const details = el(
       'details',
       { open: !collapsedGroups.has(group.name) },
@@ -121,9 +137,9 @@ const NotionTweaksPanel = (() => {
         el('span', { textContent: group.name }),
         el('span', {
           className: 'count',
-          textContent: hasActive ? `${group.unread} unread · ${group.activeIds.length}` : 'Archived',
+          textContent: group.activeCount ? `${group.unread} unread, ${group.activeCount}` : 'Archived',
         }),
-        ...(hasActive ? [archiveGroupButton(group, onArchive)] : []),
+        groupAction(group, handlers),
       ),
     );
     details.addEventListener('toggle', () => {
@@ -133,30 +149,11 @@ const NotionTweaksPanel = (() => {
         collapsedGroups.add(group.name);
       }
     });
+    const error = view.groupErrors[group.name];
     if (error) {
       details.append(el('p', { className: 'error', textContent: error }));
     }
-    details.append(
-      el(
-        'ul',
-        {},
-        ...group.items.map((item) =>
-          el(
-            'li',
-            { className: item.archived ? 'archived' : item.unread ? 'unread' : '' },
-            el(
-              'div',
-              { className: 'row' },
-              rowLink(item, onOpen),
-              archiveItemButton(item, group.name, onArchive),
-            ),
-            el('small', {
-              textContent: [actorText(item.actors), item.type, age(item.endTime)].filter(Boolean).join(' · '),
-            }),
-          ),
-        ),
-      ),
-    );
+    details.append(el('ul', {}, ...group.items.map((item) => row(item, group.name, view.currentId, handlers))));
     return details;
   }
 
@@ -167,7 +164,7 @@ const NotionTweaksPanel = (() => {
     if (view.status === 'error') {
       return [el('p', { className: 'error', textContent: view.message })];
     }
-    const sections = view.groups.map((group) => groupSection(group, view.groupErrors[group.name], handlers));
+    const sections = view.groups.map((group) => groupSection(group, view, handlers));
     if (view.canLoadMore) {
       const loadMore = el('button', { textContent: 'Load more' });
       loadMore.addEventListener('click', handlers.onLoadMore);
@@ -187,31 +184,9 @@ const NotionTweaksPanel = (() => {
     return select;
   }
 
-  function shadowRoot() {
-    return document.getElementById(HOST_ID)?.shadowRoot;
-  }
-
-  function open() {
-    if (!shadowRoot()) {
-      const host = el('div', { id: HOST_ID });
-      host.attachShadow({ mode: 'open' });
-      document.body.append(host);
-    }
-  }
-
-  function close() {
-    document.getElementById(HOST_ID)?.remove();
-  }
-
   function render(view, handlers) {
-    const root = shadowRoot();
-    if (!root) {
-      return;
-    }
     const reload = el('button', { textContent: 'Reload' });
     reload.addEventListener('click', handlers.onReload);
-    const closeButton = el('button', { textContent: 'Close' });
-    closeButton.addEventListener('click', close);
     const scrollTop = root.querySelector('.panel')?.scrollTop ?? 0;
     const panel = el(
       'div',
@@ -232,22 +207,21 @@ const NotionTweaksPanel = (() => {
         ),
         filterSelect(view.inboxType, handlers.onFilter),
         reload,
-        closeButton,
       ),
       ...body(view, handlers),
     );
-    root.replaceChildren(el('style', { textContent: STYLE }), panel);
+    root.replaceChildren(panel);
     panel.scrollTop = scrollTop;
   }
 
   // Updates only the badge: a full render during a click would replace the button under the pointer and lose the click.
   function showUnreadCount(count) {
-    const badge = shadowRoot()?.querySelector('.badge');
+    const badge = root.querySelector('.badge');
     if (badge) {
       badge.textContent = count;
       badge.hidden = !count;
     }
   }
 
-  return { open, close, isOpen: () => Boolean(shadowRoot()), render, showUnreadCount };
+  return { render, showUnreadCount };
 })();

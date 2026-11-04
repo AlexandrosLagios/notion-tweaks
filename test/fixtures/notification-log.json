@@ -32,7 +32,8 @@
             "navigable_block_id": "a2000000-0000-4000-8000-000000000002",
             "read": true,
             "end_time": "2000",
-            "type": "commented"
+            "type": "commented",
+            "activity_id": "c2000000-0000-4000-8000-000000000002"
           }
         }
       },
@@ -122,7 +123,8 @@
             "navigable_block_id": "a4000000-0000-4000-8000-000000000004",
             "read": false,
             "end_time": "3900",
-            "type": "commented"
+            "type": "commented",
+            "discussion_id": "d4a00000-0000-4000-8000-000000000041"
           }
         }
       },
@@ -135,7 +137,8 @@
             "navigable_block_id": "a4000000-0000-4000-8000-000000000004",
             "read": false,
             "end_time": "4000",
-            "type": "commented"
+            "type": "commented",
+            "discussion_id": "d4b00000-0000-4000-8000-000000000042"
           }
         }
       }
@@ -351,9 +354,19 @@
                     "id": "e1000000-0000-4000-8000-000000000001",
                     "table": "notion_user"
                   }
-                ]
+                ],
+                "timestamp": 1000,
+                "comment_data": {
+                  "alive": true,
+                  "text": [
+                    [
+                      "Please check"
+                    ]
+                  ]
+                }
               }
-            ]
+            ],
+            "discussion_id": "d1a00000-0000-4000-8000-000000000001"
           }
         }
       },
@@ -371,7 +384,16 @@
                     "id": "e2000000-0000-4000-8000-000000000002",
                     "table": "notion_user"
                   }
-                ]
+                ],
+                "timestamp": 3900,
+                "comment_data": {
+                  "alive": true,
+                  "text": [
+                    [
+                      "Earlier child"
+                    ]
+                  ]
+                }
               }
             ]
           }
@@ -391,7 +413,16 @@
                     "id": "e1000000-0000-4000-8000-000000000001",
                     "table": "notion_user"
                   }
-                ]
+                ],
+                "timestamp": 3950,
+                "comment_data": {
+                  "alive": true,
+                  "text": [
+                    [
+                      "Older words"
+                    ]
+                  ]
+                }
               },
               {
                 "type": "comment-created",
@@ -400,7 +431,48 @@
                     "id": "e2000000-0000-4000-8000-000000000002",
                     "table": "notion_user"
                   }
-                ]
+                ],
+                "timestamp": 4000,
+                "comment_data": {
+                  "alive": true,
+                  "text": [
+                    [
+                      "Looks  good "
+                    ],
+                    [
+                      "‣",
+                      [
+                        [
+                          "u",
+                          "e1000000-0000-4000-8000-000000000001"
+                        ]
+                      ]
+                    ],
+                    [
+                      " see "
+                    ],
+                    [
+                      "‣",
+                      [
+                        [
+                          "p",
+                          "a2000000-0000-4000-8000-000000000002"
+                        ]
+                      ]
+                    ],
+                    [
+                      "‣",
+                      [
+                        [
+                          "d",
+                          {
+                            "type": "date"
+                          }
+                        ]
+                      ]
+                    ]
+                  ]
+                }
               }
             ]
           }
@@ -421,6 +493,35 @@
                     "table": "bot"
                   }
                 ]
+              }
+            ]
+          }
+        }
+      },
+      "c2000000-0000-4000-8000-000000000002": {
+        "spaceId": "00000000-0000-4000-8000-000000000000",
+        "value": {
+          "value": {
+            "id": "c2000000-0000-4000-8000-000000000002",
+            "type": "commented",
+            "discussion_id": "d2a00000-0000-4000-8000-000000000002",
+            "edits": [
+              {
+                "type": "comment-created",
+                "timestamp": 1900,
+                "comment_id": "c0200000-0000-4000-8000-000000000002"
+              },
+              {
+                "type": "comment-deleted",
+                "timestamp": 2000,
+                "comment_data": {
+                  "alive": false,
+                  "text": [
+                    [
+                      "Deleted words"
+                    ]
+                  ]
+                }
               }
             ]
           }
@@ -454,6 +555,22 @@
           "value": {
             "id": "f1000000-0000-4000-8000-000000000001",
             "name": "Status Sync"
+          }
+        }
+      }
+    },
+    "comment": {
+      "c0200000-0000-4000-8000-000000000002": {
+        "spaceId": "00000000-0000-4000-8000-000000000000",
+        "value": {
+          "value": {
+            "id": "c0200000-0000-4000-8000-000000000002",
+            "alive": true,
+            "text": [
+              [
+                "From the comment table"
+              ]
+            ]
           }
         }
       }

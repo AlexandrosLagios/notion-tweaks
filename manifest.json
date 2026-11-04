@@ -3,8 +3,10 @@
   "name": "Notion Tweaks",
   "version": "0.1.0",
   "description": "Groups the Notion inbox by parent database.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "scripting", "sidePanel", "cookies"],
+  "host_permissions": ["https://app.notion.com/*"],
   "background": { "service_worker": "src/background.js" },
   "action": { "default_title": "Notion inbox groups" },
+  "side_panel": { "default_path": "sidepanel.html" },
   "options_page": "options.html"
 }

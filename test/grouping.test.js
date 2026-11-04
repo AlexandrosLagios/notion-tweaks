@@ -1,10 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseRules, resolveDatabaseId, groupNotifications, markArchived, markRead } = require('../src/grouping.js');
+const { parseRules, resolveDatabaseId, groupNotifications, markArchived, withUnreadIds } = require('../src/grouping.js');
 const log = require('./fixtures/notification-log.json');
 
 const B1 = 'b1000000-0000-4000-8000-000000000001';
+const B2 = 'b2000000-0000-4000-8000-000000000002';
 const B4 = 'b4000000-0000-4000-8000-000000000004';
+const B7 = 'b7000000-0000-4000-8000-000000000007';
 
 const TASKS_ONE = '11111111111141118111111111111111';
 const TASKS_TWO = '22222222222242228222222222222222';
@@ -87,7 +89,7 @@ test('groupNotifications puts the rule groups first, the other databases next, a
 });
 
 test('groupNotifications merges databases that share a group name', () => {
-  assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[0]), ['b7', 'b2', 'b1']);
+  assert.deepEqual(itemIds(groupsFor(RULES_TEXT)[0]), ['b7', 'b2']);
 });
 
 test('groupNotifications groups a database without a rule under the database name', () => {
@@ -95,7 +97,7 @@ test('groupNotifications groups a database without a rule under the database nam
 });
 
 test('groupNotifications without rules merges databases that share a name', () => {
-  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2', 'b1']);
+  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2']);
 });
 
 test('groupNotifications orders the database groups by their newest notification', () => {
@@ -107,7 +109,7 @@ test('groupNotifications keeps only pages outside a database in Other', () => {
 });
 
 test('groupNotifications sorts each group from newest to oldest', () => {
-  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2', 'b1']);
+  assert.deepEqual(itemIds(groupsFor('')[0]), ['b7', 'b3', 'b2']);
 });
 
 test('groupNotifications counts the unread notifications of each group', () => {
@@ -124,16 +126,44 @@ test('groupNotifications leaves out a group without notifications', () => {
   assert.deepEqual(groups.map((group) => group.name), ['Planning', 'Tasks', 'Other']);
 });
 
-test('groupNotifications describes each item for the panel', () => {
+test('groupNotifications describes each row for the panel', () => {
   assert.deepEqual(groupsFor(RULES_TEXT)[0].items[0], {
-    id: 'b7000000-0000-4000-8000-000000000007',
-    pageId: 'a1000000000040008000000000000001',
+    id: B7,
+    ids: [B7, B1],
+    unreadIds: [B1],
+    path: '/p/a1000000000040008000000000000001?d=d1a00000000040008000000000000001',
     title: 'Fix login',
-    type: 'Update',
-    actors: ['Status Sync'],
-    unread: false,
+    verbs: ['updated', 'mentioned you'],
+    actors: ['Status Sync', 'Maria Doe'],
+    preview: 'Please check',
     endTime: 7000,
   });
+});
+
+test('groupNotifications shows the newest comment and names the mentions in it', () => {
+  assert.equal(groupsFor(RULES_TEXT)[1].items[0].preview, 'Looks good @Maria Doe see Plan sprint');
+});
+
+test('groupNotifications reads a comment from the comment table and skips a deleted comment', () => {
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2);
+  assert.equal(sprint.preview, 'From the comment table');
+});
+
+test('groupNotifications has no preview for a row without a comment', () => {
+  assert.equal(groupsFor(RULES_TEXT)[2].items[0].preview, null);
+});
+
+test('groupNotifications links to the discussion of the newest child notification', () => {
+  assert.equal(groupsFor(RULES_TEXT)[1].items[0].path, '/p/a4000000000040008000000000000004?d=d4b00000000040008000000000000042');
+});
+
+test('groupNotifications links to the discussion of the activity', () => {
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2);
+  assert.equal(sprint.path, '/p/a2000000000040008000000000000002?d=d2a00000000040008000000000000002');
+});
+
+test('groupNotifications links to the page when the row has no discussion', () => {
+  assert.equal(groupsFor(RULES_TEXT)[2].items[0].path, '/p/a3000000000040008000000000000003');
 });
 
 test('groupNotifications names each person once across the children of a grouped notification', () => {
@@ -150,17 +180,17 @@ test('groupNotifications lists every notification of a group as active', () => {
 });
 
 test('markArchived keeps the row in place, flags it, and recounts the group', () => {
-  const [group] = markArchived(groupsFor(RULES_TEXT), new Set([B1]));
-  assert.deepEqual(itemIds(group), ['b7', 'b2', 'b1']);
-  assert.deepEqual(group.items.map((item) => item.archived), [false, false, true]);
+  const [group] = markArchived(groupsFor(RULES_TEXT), new Set([B7, B1]));
+  assert.deepEqual(itemIds(group), ['b7', 'b2']);
+  assert.deepEqual(group.items.map((item) => item.archived), [true, false]);
   assert.equal(group.unread, 0);
-  assert.equal(group.activeIds.includes(B1), false);
-  assert.equal(group.activeIds.length, 2);
+  assert.deepEqual(group.activeIds, [B2]);
+  assert.equal(group.activeCount, 1);
 });
 
-test('markArchived restores a row when its id leaves the set', () => {
-  const [group] = markArchived(markArchived(groupsFor(RULES_TEXT), new Set([B1])), new Set());
-  assert.deepEqual([group.items[2].archived, group.unread, group.activeIds.length], [false, 1, 3]);
+test('markArchived restores a row when its ids leave the set', () => {
+  const [group] = markArchived(markArchived(groupsFor(RULES_TEXT), new Set([B7, B1])), new Set());
+  assert.deepEqual([group.items[0].archived, group.unread, group.activeIds], [false, 1, [B7, B1, B2]]);
 });
 
 test('markArchived keeps a group whose rows are all archived', () => {
@@ -169,10 +199,25 @@ test('markArchived keeps a group whose rows are all archived', () => {
   assert.deepEqual(groups[1].activeIds, []);
 });
 
-test('markRead clears the unread state of one row and recounts only its group', () => {
-  const groups = markRead(groupsFor(RULES_TEXT), B1);
-  assert.equal(groups[0].items[2].unread, false);
+test('withUnreadIds clears the unread notifications of one row and recounts only its group', () => {
+  const groups = withUnreadIds(groupsFor(RULES_TEXT), B7, []);
+  assert.deepEqual(groups[0].items[0].unreadIds, []);
   assert.deepEqual(groups.map((group) => group.unread), [0, 1, 0, 1]);
+});
+
+test('withUnreadIds restores the unread notifications of a row', () => {
+  const groups = withUnreadIds(withUnreadIds(groupsFor(RULES_TEXT), B7, []), B7, [B1]);
+  assert.deepEqual(groups.map((group) => group.unread), [1, 1, 0, 1]);
+});
+
+test('groupNotifications gives each notification without a page its own row in Other', () => {
+  const entry = (id) => ({ value: { value: { id, read: true, end_time: '1', type: 'space-update' } } });
+  const [other] = groupNotifications(
+    { notificationIds: ['x1', 'x2'], recordMap: { notification: { x1: entry('x1'), x2: entry('x2') } } },
+    [],
+  );
+  assert.equal(other.name, 'Other');
+  assert.deepEqual(other.items.map((item) => [item.id, item.path]), [['x1', '/'], ['x2', '/']]);
 });
 
 test('groupNotifications joins the rich-text parts of a title', () => {
