@@ -23,7 +23,8 @@ Copy each field below into the Chrome Developer Dashboard. Upload the ZIP from `
 ```text
 Sort your Notion inbox into groups, flag what needs your action, and clear the rest.
 
-- Group notifications by database, or by your own rules.
+- Group notifications by database, with no setup.
+- Create your own groups in the panel, and move any page to a group.
 - Flag what needs your action. Flagged rows stay at the top until you are done, even when you show only unread notifications.
 - Get one row per page, even when a page has many notifications.
 - Archive a row or a whole group, with Undo right in the row.
@@ -31,8 +32,6 @@ Sort your Notion inbox into groups, flag what needs your action, and clear the r
 - Keep the inbox in a Chrome side panel, next to any tab, at the width you choose.
 
 Your data stays in your browser. The extension talks only to Notion, with your existing session. It has no server, no analytics, and no tracking.
-
-To use your own groups, right-click the extension icon, select Options, and add one line per database: <database URL> = <group name>.
 
 Known limits: The extension shows the first workspace of your account. It uses internal Notion endpoints, so a Notion release can break it until the extension is updated.
 
@@ -52,7 +51,7 @@ Show the Notion inbox in a side panel, where the user can group, flag, open, and
 | Permission | Justification |
 | --- | --- |
 | `sidePanel` | The inbox is shown in the Chrome side panel, which stays open while the user reads a page. |
-| `storage` | Saves the group rules, the All or Unread selection, the workspace id, and a copy of each flagged row in the browser. |
+| `storage` | Saves the group rules, the All or Unread selection, the workspace id, and a copy of each flagged or moved row in the browser. |
 | `scripting` | Opens a selected page in the existing Notion tab without a reload, and reads which Notion account is active in that tab. |
 | Host permission `https://app.notion.com/*` | Loads the inbox from Notion, and sends the archive and read updates that the user asks for. The extension accesses no other site. |
 
@@ -73,5 +72,5 @@ Show the Notion inbox in a side panel, where the user can group, flag, open, and
 ## Test instructions tab
 
 ```text
-Sign in to any Notion account at https://app.notion.com, and make sure that the inbox has at least one notification. To create one, ask another member to mention you in a comment. Select the extension icon to open the side panel. Select a row to open the page. Point to a row, and select Flag or Archive.
+Sign in to any Notion account at https://app.notion.com, and make sure that the inbox has at least one notification. To create one, ask another member to mention you in a comment. Select the extension icon to open the side panel. Select a row to open the page. Point to a row, and select Flag, Move, or Archive. To create a group, select Move, and select New group.
 ```

@@ -16,6 +16,14 @@ const NotionTweaksGrouping = (() => {
     PAGE: 'p',
   };
 
+  const TIER = {
+    ACTION_NEEDED: 0,
+    CUSTOM: 1,
+    RULE: 2,
+    DATABASE: 3,
+    OTHER: 4,
+  };
+
   const TYPE_VERBS = {
     'user-mentioned': 'mentioned you',
     'permission-group-mentioned': 'mentioned your group',
@@ -33,6 +41,11 @@ const NotionTweaksGrouping = (() => {
   const byNewest = (a, b) => Number(b.end_time) - Number(a.end_time);
 
   const byNewestRow = (a, b) => b.endTime - a.endTime;
+
+  const isCustomGroup = ({ name, items }) => name !== ACTION_NEEDED_GROUP && items.every((row) => row.movedTo);
+
+  // A row that a flag saved before custom groups existed has no movedTo.
+  const savedGroupOf = (row) => row.movedTo ?? ACTION_NEEDED_GROUP;
 
   const decorationValue = (decorations, name) => decorations?.find(([candidate]) => candidate === name)?.[1];
 
@@ -188,29 +201,37 @@ const NotionTweaksGrouping = (() => {
 
   function sortGroups(groups, rules) {
     const ruleGroups = [...new Set(rules.map((rule) => rule.group))];
-    const tierOf = (name) => {
-      if (name === ACTION_NEEDED_GROUP) {
-        return -1;
+    const tierOf = (group) => {
+      if (group.name === ACTION_NEEDED_GROUP) {
+        return TIER.ACTION_NEEDED;
       }
-      return name === OTHER_GROUP ? 2 : ruleGroups.includes(name) ? 0 : 1;
+      if (group.name === OTHER_GROUP) {
+        return TIER.OTHER;
+      }
+      if (ruleGroups.includes(group.name)) {
+        return TIER.RULE;
+      }
+      return isCustomGroup(group) ? TIER.CUSTOM : TIER.DATABASE;
     };
-    const rank = (group) => [tierOf(group.name), ruleGroups.indexOf(group.name), -group.items[0].endTime];
-    return [...groups].sort((a, b) => {
-      const [first, second] = [rank(a), rank(b)];
-      return first[0] - second[0] || first[1] - second[1] || first[2] - second[2];
-    });
+    return [...groups].sort(
+      (a, b) =>
+        tierOf(a) - tierOf(b) ||
+        ruleGroups.indexOf(a.name) - ruleGroups.indexOf(b.name) ||
+        (tierOf(a) === TIER.CUSTOM ? a.name.localeCompare(b.name) : byNewestRow(a.items[0], b.items[0])),
+    );
   }
 
-  function mergeFlaggedRow(saved, fresh) {
+  function mergeSavedRow(saved, fresh) {
     const olderIds = saved.ids.filter((id) => !fresh.ids.includes(id));
     return {
       ...fresh,
+      movedTo: savedGroupOf(saved),
       ids: [...fresh.ids, ...olderIds],
       unreadIds: [...fresh.unreadIds, ...saved.unreadIds.filter((id) => olderIds.includes(id))],
     };
   }
 
-  function groupNotifications({ notificationIds, recordMap }, rules, flaggedRows) {
+  function groupNotifications({ notificationIds, recordMap }, rules, movedRows) {
     const newestFirst = notificationIds
       .map((id) => record(recordMap, 'notification', id))
       .filter(Boolean)
@@ -219,26 +240,34 @@ const NotionTweaksGrouping = (() => {
     const placedRows = [...pages.values()].map((notifications) => {
       const homeGroup = groupNameOf(resolveDatabaseId(recordMap, notifications[0]), rules);
       const row = toRow(recordMap, notifications, homeGroup);
-      const saved = flaggedRows[row.pageKey];
-      return saved ? { group: ACTION_NEEDED_GROUP, row: mergeFlaggedRow(saved, row) } : { group: homeGroup, row };
+      const saved = movedRows[row.pageKey];
+      return saved ? mergeSavedRow(saved, row) : row;
     });
-    const loadedPages = new Set(placedRows.map(({ row }) => row.pageKey));
-    const savedOnlyRows = Object.values(flaggedRows)
+    const loadedPages = new Set(placedRows.map((row) => row.pageKey));
+    const savedOnlyRows = Object.values(movedRows)
       .filter((row) => !loadedPages.has(row.pageKey))
-      .map((row) => ({ group: ACTION_NEEDED_GROUP, row }));
-    const rowsByGroup = Map.groupBy([...placedRows, ...savedOnlyRows], ({ group }) => group);
-    const groups = [...rowsByGroup].map(([name, entries]) =>
-      summarize(name, entries.map(({ row }) => row).sort(byNewestRow)),
-    );
+      .map((row) => ({ ...row, movedTo: savedGroupOf(row) }));
+    const rowsByGroup = Map.groupBy([...placedRows, ...savedOnlyRows], (row) => row.movedTo ?? row.homeGroup);
+    const groups = [...rowsByGroup].map(([name, rows]) => summarize(name, rows.sort(byNewestRow)));
     return sortGroups(groups, rules);
   }
 
-  function moveRow(groups, rowId, targetName, rules) {
-    const moved = groups.flatMap((group) => group.items).find((item) => item.id === rowId);
-    const without = groups.map((group) => summarize(group.name, group.items.filter((item) => item !== moved)));
+  function moveRow(groups, pageKey, targetName, rules) {
+    const found = groups.flatMap((group) => group.items).find((item) => item.pageKey === pageKey);
+    if (!found) {
+      return groups;
+    }
+    const { movedTo, ...row } = found;
+    const moved = targetName === row.homeGroup ? row : { ...row, movedTo: targetName };
+    const without = groups.map((group) => summarize(group.name, group.items.filter((item) => item !== found)));
     const targetItems = without.find((group) => group.name === targetName)?.items ?? [];
     const others = without.filter((group) => group.items.length > 0 && group.name !== targetName);
     return sortGroups([...others, summarize(targetName, [...targetItems, moved].sort(byNewestRow))], rules);
+  }
+
+  function moveTargets(groups, item, currentGroup) {
+    const customGroups = groups.filter(isCustomGroup).map(({ name }) => name);
+    return [...new Set([...customGroups, item.homeGroup])].filter((name) => name !== currentGroup);
   }
 
   function markArchived(groups, archivedIds) {
@@ -255,6 +284,7 @@ const NotionTweaksGrouping = (() => {
     resolveDatabaseId,
     groupNotifications,
     moveRow,
+    moveTargets,
     markArchived,
     withUnreadIds,
   };

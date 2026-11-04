@@ -10,6 +10,7 @@ const NotionTweaksPanel = (() => {
   ];
   const collapsedGroups = new Set();
   const root = document.getElementById('root');
+  const newGroupDialog = document.getElementById('new-group');
 
   function el(tag, props = {}, ...children) {
     const element = Object.assign(document.createElement(tag), props);
@@ -60,20 +61,49 @@ const NotionTweaksPanel = (() => {
     return button;
   }
 
-  function flagAction(item, groupName, { onFlag, onUnflag }) {
+  function flagAction(item, groupName, { onMove }) {
     const isFlagged = groupName === NotionTweaksGrouping.ACTION_NEEDED_GROUP;
     const button = el('button', { textContent: isFlagged ? 'Unflag' : 'Flag' });
     button.addEventListener('click', (event) => {
-      if (isRepeatClick(event)) {
-        return;
-      }
-      if (isFlagged) {
-        onUnflag(item);
-      } else {
-        onFlag(item);
+      if (!isRepeatClick(event)) {
+        onMove(item, isFlagged ? item.homeGroup : NotionTweaksGrouping.ACTION_NEEDED_GROUP);
       }
     });
     return button;
+  }
+
+  function askGroupName() {
+    const input = newGroupDialog.querySelector('input');
+    input.value = '';
+    newGroupDialog.returnValue = '';
+    newGroupDialog.showModal();
+    return new Promise((resolve) => {
+      newGroupDialog.addEventListener('close', () => resolve(newGroupDialog.returnValue && input.value.trim()), {
+        once: true,
+      });
+    });
+  }
+
+  // ponytail: one select per row; fill the options on focus if a long list renders slowly.
+  function moveAction(item, groupName, groups, { onMove }) {
+    const newGroup = el('option', { textContent: 'New group…' });
+    const select = el(
+      'select',
+      { ariaLabel: 'Move to a group' },
+      el('option', { value: '', textContent: 'Move', hidden: true }),
+      ...NotionTweaksGrouping.moveTargets(groups, item, groupName).map((name) =>
+        el('option', { value: name, textContent: name }),
+      ),
+      newGroup,
+    );
+    select.addEventListener('change', async () => {
+      const target = newGroup.selected ? await askGroupName() : select.value;
+      select.value = '';
+      if (target) {
+        onMove(item, target);
+      }
+    });
+    return select;
   }
 
   function rowLink(item, groupName, { onOpen, onRead }) {
@@ -137,11 +167,11 @@ const NotionTweaksPanel = (() => {
     return `${state} ${item.id === currentId ? 'current' : ''}`.trim();
   }
 
-  function row(item, groupName, currentId, handlers) {
+  function row(item, groupName, view, handlers) {
     const preview = item.preview ? [el('p', { className: 'preview', textContent: item.preview })] : [];
     return el(
       'li',
-      { className: rowClass(item, currentId) },
+      { className: rowClass(item, view.currentId) },
       el(
         'div',
         { className: 'row' },
@@ -151,7 +181,9 @@ const NotionTweaksPanel = (() => {
           'div',
           { className: 'row-actions' },
           rowAction(item, groupName, handlers),
-          ...(item.archived ? [] : [flagAction(item, groupName, handlers)]),
+          ...(item.archived
+            ? []
+            : [flagAction(item, groupName, handlers), moveAction(item, groupName, view.groups, handlers)]),
         ),
       ),
       el('small', { textContent: sentence(item) }),
@@ -184,11 +216,11 @@ const NotionTweaksPanel = (() => {
         collapsedGroups.add(group.name);
       }
     });
-    const error = view.groupErrors[group.name];
+    const error = view.groupErrors.get(group.name);
     if (error) {
       details.append(el('p', { className: 'error', textContent: error }));
     }
-    details.append(el('ul', {}, ...group.items.map((item) => row(item, group.name, view.currentId, handlers))));
+    details.append(el('ul', {}, ...group.items.map((item) => row(item, group.name, view, handlers))));
     return details;
   }
 

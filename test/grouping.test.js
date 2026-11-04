@@ -6,6 +6,7 @@ const {
   resolveDatabaseId,
   groupNotifications,
   moveRow,
+  moveTargets,
   markArchived,
   withUnreadIds,
 } = require('../src/grouping.js');
@@ -15,6 +16,9 @@ const B1 = 'b1000000-0000-4000-8000-000000000001';
 const B2 = 'b2000000-0000-4000-8000-000000000002';
 const B4 = 'b4000000-0000-4000-8000-000000000004';
 const B7 = 'b7000000-0000-4000-8000-000000000007';
+const FIX_LOGIN_PAGE = 'a1000000-0000-4000-8000-000000000001';
+const Q1_NOTES_PAGE = 'a4000000-0000-4000-8000-000000000004';
+const TEAM_WIKI_PAGE = 'a6000000-0000-4000-8000-000000000006';
 
 const TASKS_ONE = '11111111111141118111111111111111';
 const TASKS_TWO = '22222222222242228222222222222222';
@@ -28,10 +32,12 @@ const RULES_TEXT = [
 ].join('\n');
 
 const notification = (id) => log.recordMap.notification[id].value.value;
-const groupsFor = (rulesText, flaggedRows = {}) => groupNotifications(log, parseRules(rulesText).rules, flaggedRows);
+const groupsFor = (rulesText, movedRows = {}) => groupNotifications(log, parseRules(rulesText).rules, movedRows);
 const groupNames = (groups) => groups.map((group) => group.name);
 const fixLoginRow = () => groupsFor(RULES_TEXT)[0].items[0];
+const planningRow = () => groupsFor(RULES_TEXT)[1].items[0];
 const flagged = (row) => ({ [row.pageKey]: row });
+const movedTo = (row, group) => ({ [row.pageKey]: { ...row, movedTo: group } });
 const itemIds = (group) => group.items.map((item) => item.id.slice(0, 2));
 
 test('parseRules takes the database id from the URL path, not the view id in the query', () => {
@@ -218,7 +224,7 @@ test('groupNotifications keeps a flagged row that the response does not hold', (
   const stored = fixLoginRow();
   const [section] = groupNotifications({ notificationIds: [], recordMap: {} }, [], flagged(stored));
   assert.equal(section.name, ACTION_NEEDED_GROUP);
-  assert.deepEqual(section.items, [stored]);
+  assert.deepEqual(section.items, [{ ...stored, movedTo: ACTION_NEEDED_GROUP }]);
 });
 
 test('groupNotifications updates a flagged row and keeps the notifications that the response does not hold', () => {
@@ -230,34 +236,116 @@ test('groupNotifications updates a flagged row and keeps the notifications that 
   assert.deepEqual(row.unreadIds, [B1, older]);
 });
 
+test('groupNotifications records Action needed on a flagged row saved without a group', () => {
+  const [row] = groupsFor(RULES_TEXT, flagged(fixLoginRow()))[0].items;
+  assert.equal(row.movedTo, ACTION_NEEDED_GROUP);
+});
+
 test('groupNotifications keeps the usual group of a flagged row', () => {
   const [row] = groupsFor(RULES_TEXT, flagged(fixLoginRow()))[0].items;
   assert.equal(row.homeGroup, 'Engineering');
 });
 
 test('moveRow moves a row to Action needed and recounts both groups', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), B7, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
   assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Planning', 'Tasks', 'Other']);
   assert.deepEqual([groups[0].unread, groups[1].unread], [1, 0]);
 });
 
 test('moveRow drops a group that becomes empty', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), B4, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
   assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Tasks', 'Other']);
 });
 
 test('moveRow returns a row to its usual group in rule order and date order', () => {
   const rules = parseRules(RULES_TEXT).rules;
   const original = groupsFor(RULES_TEXT);
-  const moved = moveRow(original, B7, ACTION_NEEDED_GROUP, rules);
-  const returned = moveRow(moved, B7, 'Engineering', rules);
+  const moved = moveRow(original, FIX_LOGIN_PAGE, ACTION_NEEDED_GROUP, rules);
+  const returned = moveRow(moved, FIX_LOGIN_PAGE, 'Engineering', rules);
   assert.deepEqual(groupNames(returned), groupNames(original));
   assert.deepEqual(itemIds(returned[0]), ['b7', 'b2']);
 });
 
 test('moveRow to the current group keeps one copy of the row', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), B7, 'Engineering', parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Engineering', parseRules(RULES_TEXT).rules);
   assert.deepEqual(itemIds(groups[0]), ['b7', 'b2']);
+});
+
+test('groupNotifications puts a moved page in its custom group, after Action needed and before the rule groups', () => {
+  const groups = groupsFor(RULES_TEXT, { ...flagged(fixLoginRow()), ...movedTo(planningRow(), 'Waiting') });
+  assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Waiting', 'Engineering', 'Tasks', 'Other']);
+  assert.deepEqual(itemIds(groups[1]), ['b4']);
+});
+
+test('groupNotifications sorts the custom groups by name', () => {
+  const groups = groupsFor(RULES_TEXT, { ...movedTo(fixLoginRow(), 'Zeta'), ...movedTo(planningRow(), 'Alpha') });
+  assert.deepEqual(groupNames(groups), ['Alpha', 'Zeta', 'Engineering', 'Tasks', 'Other']);
+});
+
+test('groupNotifications keeps a moved row that the response does not hold', () => {
+  const [section] = groupNotifications({ notificationIds: [], recordMap: {} }, [], movedTo(fixLoginRow(), 'Waiting'));
+  assert.equal(section.name, 'Waiting');
+});
+
+test('groupNotifications keeps a moved row in its custom group when Notion returns the row with a new comment', () => {
+  const stored = { ...fixLoginRow(), title: 'Old title', movedTo: 'Waiting' };
+  const [group] = groupsFor(RULES_TEXT, { [stored.pageKey]: stored });
+  assert.equal(group.name, 'Waiting');
+  assert.equal(group.items[0].title, 'Fix login');
+  assert.equal(group.items[0].movedTo, 'Waiting');
+});
+
+test('moveRow moves a row to a new custom group and records the group on the row', () => {
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', parseRules(RULES_TEXT).rules);
+  assert.deepEqual(groupNames(groups), ['Waiting', 'Engineering', 'Planning', 'Tasks', 'Other']);
+  assert.equal(groups[0].items[0].movedTo, 'Waiting');
+});
+
+test('moveRow to the usual group clears the custom group from the row', () => {
+  const rules = parseRules(RULES_TEXT).rules;
+  const groups = moveRow(moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', rules), FIX_LOGIN_PAGE, 'Engineering', rules);
+  assert.deepEqual(groupNames(groups), ['Engineering', 'Planning', 'Tasks', 'Other']);
+  assert.equal('movedTo' in groups[0].items[0], false);
+});
+
+test('moveRow drops a custom group when the last row leaves', () => {
+  const rules = parseRules(RULES_TEXT).rules;
+  const groups = moveRow(moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', rules), FIX_LOGIN_PAGE, 'Review', rules);
+  assert.deepEqual(groupNames(groups), ['Review', 'Engineering', 'Planning', 'Tasks', 'Other']);
+});
+
+test('moveRow keeps the place of a rule group that receives a moved row', () => {
+  const rules = parseRules(RULES_TEXT).rules;
+  const groups = moveRow(groupsFor(RULES_TEXT), TEAM_WIKI_PAGE, 'Planning', rules);
+  assert.deepEqual(groupNames(groups), ['Engineering', 'Planning', 'Tasks', 'Other']);
+});
+
+test('moveRow keeps the place of a database group that receives a moved row', () => {
+  const groups = moveRow(groupsFor(''), TEAM_WIKI_PAGE, 'Roadmap', []);
+  assert.deepEqual(groupNames(groups), ['Tasks', 'Roadmap', 'Other']);
+});
+
+test('moveTargets leaves out a database group that received a moved row', () => {
+  const groups = moveRow(groupsFor(''), TEAM_WIKI_PAGE, 'Roadmap', []);
+  const tasksRow = groups.find((group) => group.name === 'Tasks').items[0];
+  assert.deepEqual(moveTargets(groups, tasksRow, 'Tasks'), []);
+});
+
+test('moveRow leaves the groups unchanged when a reload has removed the page', () => {
+  const original = groupsFor(RULES_TEXT);
+  assert.deepEqual(moveRow(original, 'removed-page', 'Waiting', parseRules(RULES_TEXT).rules), original);
+});
+
+test('moveTargets lists the custom groups without Action needed', () => {
+  const groups = groupsFor(RULES_TEXT, { ...movedTo(fixLoginRow(), 'Waiting'), ...flagged(planningRow()) });
+  const tasksRow = groups.find((group) => group.name === 'Tasks').items[0];
+  assert.deepEqual(moveTargets(groups, tasksRow, 'Tasks'), ['Waiting']);
+});
+
+test('moveTargets offers the usual group for a row in a custom group, and leaves out the current group', () => {
+  const groups = groupsFor(RULES_TEXT, { ...movedTo(fixLoginRow(), 'Waiting'), ...movedTo(planningRow(), 'Review') });
+  const waitingRow = groups.find((group) => group.name === 'Waiting').items[0];
+  assert.deepEqual(moveTargets(groups, waitingRow, 'Waiting'), ['Review', 'Engineering']);
 });
 
 test('withUnreadIds clears the unread notifications of one row and recounts only its group', () => {

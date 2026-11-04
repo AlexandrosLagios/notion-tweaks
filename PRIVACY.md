@@ -25,7 +25,7 @@ The extension sends requests only to `https://app.notion.com`, with your existin
 The extension stores these items in your browser:
 
 - Your workspace id, and your All or Unread selection, in `chrome.storage.local`.
-- A copy of each row that you flag, in `chrome.storage.local`. The copy holds the title, the names, and the comment preview of the row.
+- A copy of each row that you flag or move to a group, in `chrome.storage.local`. The copy holds the title, the names, the comment preview of the row, and the name of the group.
 - Your group rules, in `chrome.storage.sync`. If you turn on Chrome sync, Google syncs these rules between your Chrome browsers.
 
 To delete all these items, remove the extension from Chrome.

@@ -2,7 +2,7 @@
 
 The source of Inbox Tweaks for Notion, a Chrome extension that gives the Notion inbox groups, flags, and undo. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
 
-The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. Each group collects the notifications of one or more databases. The panel uses internal Notion endpoints, so a Notion release can break the panel.
+The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. By default, each group collects the notifications of one database, and you can create your own groups in the panel. The panel uses internal Notion endpoints, so a Notion release can break the panel.
 
 ## Install
 
@@ -12,13 +12,32 @@ The extension adds a Chrome side panel for the Notion web app at `https://app.no
 
 After a change to `manifest.json` or `src/background.js`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
 
-## Configure the groups
+## Groups
+
+The panel needs no setup. A notification goes to a group with the name of its database. Databases with the same name share a group. The "Other" group holds the notifications of pages outside a database.
+
+### Create a custom group
+
+1. Point to a row, and select "Move".
+2. Select "New group…".
+3. Type the group name, and select "Create".
+
+The row moves to the new group at once. A move applies to the whole page, and a new comment on the page joins the moved row.
+
+To add another row, point to the row, select "Move", and select the group. To return a row, select "Move", and select the group that the row came from. A custom group disappears when the last row leaves the group.
+
+A custom group works like the "Action needed" section. The group shows under both filters, and also when the row is older than the loaded list. "Archive" removes the row from the group, and "Undo" returns the row. A custom group exists only in this Chrome profile. The custom groups show after "Action needed" and before the other groups, in name order.
+
+### Add database rules
+
+A rule sends all the notifications of a database to a group. A rule can also separate two databases with the same name.
 
 1. Open the extension options from `chrome://extensions`.
 2. Write one rule per line: `<database URL or id> = <group name>`.
 3. Select "Save".
+4. Select "Reload" in the panel.
 
-Copy the database URL from the address bar of the full-page database. The options page does not save a line without `=`, without a database id, or without a group name. Several databases can share one group name. The line order sets the group order. A notification that matches no rule goes to a group with the name of its database. The "Other" group holds the notifications of pages outside a database.
+Copy the database URL from the address bar of the full-page database. The options page does not save a line without `=`, without a database id, or without a group name. Several databases can share one group name. The line order sets the group order.
 
 ## Use the panel
 
@@ -59,3 +78,4 @@ The unit tests cover `src/grouping.js` and `manifest.json`. Do the manual check 
 2. Select a row. Make sure that the Notion tab opens the page without a reload.
 3. Archive a row. Find the notification in the "Archived" filter of the native Notion inbox.
 4. Select "Undo". Make sure that the notification returns to the native Notion inbox.
+5. Select "Move" on a row, and create a group. Close the panel, and open the panel again. Make sure that the row stays in the group.

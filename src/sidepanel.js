@@ -13,7 +13,7 @@
   let unreadCount;
   let currentId;
   let rules = [];
-  let flaggedRows = {};
+  let movedRows = {};
 
   const render = () => NotionTweaksPanel.render({ ...view, inboxType, unreadCount, currentId }, handlers);
 
@@ -35,14 +35,10 @@
   }
 
   // ponytail: one panel writes the flags; read them before each write if two windows ever overwrite each other.
-  function saveFlaggedRows() {
-    const section = view.groups?.find((group) => group.name === NotionTweaksGrouping.ACTION_NEEDED_GROUP);
-    for (const item of section?.items ?? []) {
-      if (flaggedRows[item.pageKey]) {
-        flaggedRows[item.pageKey] = item;
-      }
-    }
-    chrome.storage.local.set({ flaggedRows }).catch(console.error);
+  function saveMovedRows() {
+    const rows = view.groups.flatMap((group) => group.items).filter((item) => item.movedTo && !item.archived);
+    movedRows = Object.fromEntries(rows.map((item) => [item.pageKey, item]));
+    chrome.storage.local.set({ flaggedRows: movedRows }).catch(console.error);
   }
 
   async function cachedSpaceId() {
@@ -72,13 +68,13 @@
       view = {
         status: 'ready',
         groups: NotionTweaksGrouping.markArchived(
-          NotionTweaksGrouping.groupNotifications(response, rules, flaggedRows),
+          NotionTweaksGrouping.groupNotifications(response, rules, movedRows),
           archivedIds,
         ),
         canLoadMore: response.notificationIds.length >= size,
-        groupErrors: {},
+        groupErrors: new Map(),
       };
-      saveFlaggedRows();
+      saveMovedRows();
     } catch (error) {
       await chrome.storage.local.remove('spaceIds');
       if (loadId !== latestLoadId) {
@@ -100,27 +96,17 @@
       view = {
         ...view,
         groups: changeGroups(view.groups),
-        groupErrors: { ...view.groupErrors, [groupName]: error },
+        groupErrors: new Map(view.groupErrors).set(groupName, error),
       };
       render();
+      saveMovedRows();
     }
-    saveFlaggedRows();
   }
 
   async function changeArchivedState(items, groupName, archive, write) {
     const notificationIds = items.flatMap((item) => item.ids);
-    const apply = (archived) => {
+    const apply = (archived) =>
       notificationIds.forEach((id) => (archived ? archivedIds.add(id) : archivedIds.delete(id)));
-      if (groupName === NotionTweaksGrouping.ACTION_NEEDED_GROUP) {
-        items.forEach((item) => {
-          if (archived) {
-            delete flaggedRows[item.pageKey];
-          } else {
-            flaggedRows[item.pageKey] = item;
-          }
-        });
-      }
-    };
     const showArchivedState = (error) =>
       showRowChange((groups) => NotionTweaksGrouping.markArchived(groups, archivedIds), groupName, error);
     apply(archive);
@@ -165,14 +151,8 @@
         ),
       );
     },
-    onFlag(item) {
-      flaggedRows[item.pageKey] = item;
-      const target = NotionTweaksGrouping.ACTION_NEEDED_GROUP;
-      showRowChange((groups) => NotionTweaksGrouping.moveRow(groups, item.id, target, rules), target);
-    },
-    onUnflag(item) {
-      delete flaggedRows[item.pageKey];
-      showRowChange((groups) => NotionTweaksGrouping.moveRow(groups, item.id, item.homeGroup, rules), item.homeGroup);
+    onMove(item, target) {
+      showRowChange((groups) => NotionTweaksGrouping.moveRow(groups, item.pageKey, target, rules), target);
     },
     async onRead(item, groupName) {
       const { id, unreadIds } = item;
@@ -202,7 +182,7 @@
 
   chrome.storage.local.get(['inboxType', 'flaggedRows']).then((stored) => {
     inboxType = stored.inboxType ?? inboxType;
-    flaggedRows = stored.flaggedRows ?? flaggedRows;
+    movedRows = stored.flaggedRows ?? movedRows;
     refresh();
   });
 
