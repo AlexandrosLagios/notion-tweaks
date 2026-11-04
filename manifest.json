@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Notion Tweaks",
-  "version": "0.1.0",
-  "description": "Groups the Notion inbox by parent database.",
-  "permissions": ["storage", "scripting", "sidePanel", "cookies"],
+  "name": "Inbox Tweaks for Notion",
+  "version": "1.0.0",
+  "description": "Group your Notion inbox by database, flag what needs action, and open pages without a reload. Not affiliated with Notion.",
+  "icons": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "permissions": ["storage", "scripting", "sidePanel"],
   "host_permissions": ["https://app.notion.com/*"],
   "background": { "service_worker": "src/background.js" },
-  "action": { "default_title": "Notion inbox groups" },
+  "action": { "default_title": "Open the inbox" },
   "side_panel": { "default_path": "sidepanel.html" },
   "options_page": "options.html"
 }

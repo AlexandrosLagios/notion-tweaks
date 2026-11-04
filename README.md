@@ -1,6 +1,6 @@
 # notion-tweaks
 
-Chrome extension with tweaks for notion.so, starting with inbox grouping by parent database.
+The source of Inbox Tweaks for Notion, a Chrome extension that gives the Notion inbox groups, flags, and undo. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
 
 The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. Each group collects the notifications of one or more databases. The panel uses internal Notion endpoints, so a Notion release can break the panel.
 
@@ -38,6 +38,12 @@ A row holds all the notifications of one page. The row shows who acted and the t
 An archived row dims at once and stays in place, so the other rows do not move under the pointer. "Undo" restores the row and its read state. "Reload" removes the archived rows. When Notion rejects a request, the row returns to the earlier state and an error line shows below the group header.
 
 The badge next to the title shows the number of unread notifications. The badge loads separately, so the list does not wait for the badge.
+
+## Publish
+
+1. Update `version` in `manifest.json`.
+2. Run `scripts/package.sh`. The script writes the ZIP to `dist/`.
+3. Upload the ZIP in the Chrome Developer Dashboard. `store/listing.md` holds the text for each field.
 
 ## Test
 

@@ -1,12 +1,14 @@
 const NotionTweaksApi = (() => {
   const NOTION_ORIGIN = 'https://app.notion.com';
   const ACTIVE_USER_COOKIE = 'notion_user_id';
+  const ANY_USER = 'any-user';
   const INBOX_TYPE = {
     ALL: 'unread_and_read',
     UNREAD: 'unread_only',
   };
   const UNREAD_COUNT_REQUEST_SIZE = 20;
   const IN_PLACE_TIMEOUT_MS = 5000;
+  const HTTP_UNAUTHORIZED = 401;
 
   const pageUrl = (path) => `${NOTION_ORIGIN}${path}`;
 
@@ -30,24 +32,43 @@ const NotionTweaksApi = (() => {
       body: JSON.stringify(body),
       ...options,
     });
+    if (response.status === HTTP_UNAUTHORIZED) {
+      throw new SignedOutError();
+    }
     if (!response.ok) {
       throw new NotionApiError(endpoint, `HTTP ${response.status}`);
     }
     return response.json();
   }
 
+  // Runs in the Notion tab, so the function can use no outside values.
+  function readCookie(name) {
+    const entry = document.cookie.split('; ').find((cookie) => cookie.startsWith(`${name}=`));
+    return entry && decodeURIComponent(entry.slice(name.length + 1));
+  }
+
   async function activeUserId() {
-    const cookie = await chrome.cookies.get({ url: NOTION_ORIGIN, name: ACTIVE_USER_COOKIE });
-    return cookie && decodeURIComponent(cookie.value);
+    const [tab] = await chrome.tabs.query({ url: `${NOTION_ORIGIN}/*` });
+    if (!tab) {
+      return ANY_USER;
+    }
+    try {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: readCookie,
+        args: [ACTIVE_USER_COOKIE],
+      });
+      return result ?? ANY_USER;
+    } catch {
+      return ANY_USER;
+    }
   }
 
   async function findSpaceId(userId) {
-    if (!userId) {
-      throw new SignedOutError();
-    }
     const spacesByUser = await post('getSpaces', {});
+    const user = spacesByUser[userId] ?? Object.values(spacesByUser)[0];
     // ponytail: first space of the active user; add a space picker when an account has several.
-    const [spaceId] = Object.keys(spacesByUser[userId]?.space ?? {});
+    const [spaceId] = Object.keys(user?.space ?? {});
     if (!spaceId) {
       throw new SignedOutError();
     }
