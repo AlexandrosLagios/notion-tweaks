@@ -63,7 +63,7 @@ const NotionTweaksPanel = (() => {
 
   function flagAction(item, groupName, { onMove }) {
     const isFlagged = groupName === NotionTweaksGrouping.ACTION_NEEDED_GROUP;
-    const button = el('button', { textContent: isFlagged ? 'Unflag' : 'Flag' });
+    const button = el('button', { textContent: isFlagged ? 'No action' : 'Action' });
     button.addEventListener('click', (event) => {
       if (!isRepeatClick(event)) {
         onMove(item, isFlagged ? item.homeGroup : NotionTweaksGrouping.ACTION_NEEDED_GROUP);

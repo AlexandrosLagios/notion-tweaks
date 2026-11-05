@@ -1,6 +1,6 @@
 # notion-tweaks
 
-The source of Inbox Tweaks for Notion, a Chrome extension that gives the Notion inbox groups, flags, and undo. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
+The source of Inbox Tweaks for Notion, a Chrome extension that gives the Notion inbox groups, an "Action needed" section, and undo. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
 
 The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. By default, each group collects the notifications of one database, and you can create your own groups in the panel. The panel uses internal Notion endpoints, so a Notion release can break the panel.
 
@@ -48,9 +48,9 @@ Copy the database URL from the address bar of the full-page database. The option
 5. To archive a group, select "Archive" in the group header, and then select "Archive <count>?" within 3 seconds.
 6. To show only the unread notifications, select "Unread" in the header. The panel keeps the selection.
 
-To collect the notifications that need your action, point to a row, and select "Flag". The row moves to the "Action needed" section at the top. A new comment on a flagged page joins the flagged row. To remove the flag, select "Unflag", or archive the row.
+To collect the notifications that need your action, point to a row, and select "Action". The row moves to the "Action needed" section at the top. A new comment on that page joins the row. To take the row out of the section, select "No action", or archive the row.
 
-The section shows under both filters, and also when the row is older than the loaded list, because the extension saves a copy of each flagged row in `chrome.storage.local`. A flag exists only in this Chrome profile. A notification that you archive in the native Notion inbox stays in the section until you select "Unflag".
+The section shows under both filters, and also when the row is older than the loaded list, because the extension saves a copy of each row in the section in `chrome.storage.local`. The section exists only in this Chrome profile. A notification that you archive in the native Notion inbox stays in the section until you select "No action".
 
 A row holds all the notifications of one page. The row shows who acted and the text of the newest comment. "Archive" applies to all the notifications of the row.
 
