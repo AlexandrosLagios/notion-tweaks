@@ -1,6 +1,6 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
   ACTION_NEEDED_GROUP,
   parseRules,
   resolveDatabaseId,
@@ -12,8 +12,9 @@ const {
   regroup,
   markArchived,
   withUnreadIds,
-} = require('../src/grouping.js');
-const log = require('./fixtures/notification-log.json');
+} from '../src/grouping.ts';
+import type { Group, RecordMap, Row } from '../src/grouping.ts';
+import log from './fixtures/notification-log.json' with { type: 'json' };
 
 const B1 = 'b1000000-0000-4000-8000-000000000001';
 const B2 = 'b2000000-0000-4000-8000-000000000002';
@@ -36,14 +37,14 @@ const RULES_TEXT = [
 
 const TASKS_DATABASE = { databaseId: TASKS_ONE, collectionId: '111111111111411181111111111111c1', databaseName: 'Tasks' };
 
-const notification = (id) => log.recordMap.notification[id].value.value;
-const groupsFor = (rulesText, movedRows = {}) => groupNotifications(log, parseRules(rulesText), movedRows);
-const groupNames = (groups) => groups.map((group) => group.name);
+const notification = (id: string) => (log.recordMap as RecordMap).notification[id].value.value;
+const groupsFor = (rulesText: string, movedRows: Record<string, Row> = {}) => groupNotifications(log, parseRules(rulesText), movedRows);
+const groupNames = (groups: Group[]) => groups.map((group) => group.name);
 const fixLoginRow = () => groupsFor(RULES_TEXT)[0].items[0];
 const planningRow = () => groupsFor(RULES_TEXT)[1].items[0];
-const flagged = (row) => ({ [row.pageKey]: row });
-const movedTo = (row, group) => ({ [row.pageKey]: { ...row, movedTo: group } });
-const itemIds = (group) => group.items.map((item) => item.id.slice(0, 2));
+const flagged = (row: Row) => ({ [row.pageKey]: row });
+const movedTo = (row: Row, group: string) => ({ [row.pageKey]: { ...row, movedTo: group } });
+const itemIds = (group: Group) => group.items.map((item) => item.id.slice(0, 2));
 
 test('parseRules takes the database id from the URL path, not the view id in the query', () => {
   assert.equal(parseRules(RULES_TEXT)[0].databaseId, TASKS_ONE);
@@ -78,7 +79,7 @@ test('resolveDatabaseId finds the database of a page in a database', () => {
 });
 
 test('resolveDatabaseId walks up from a sub-page to its database', () => {
-  const database = resolveDatabaseId(log.recordMap, notification('b4000000-0000-4000-8000-000000000004'));
+  const database = resolveDatabaseId(log.recordMap, notification('b4000000-0000-4000-8000-000000000004'))!;
   assert.equal(database.databaseId, ROADMAP);
 });
 
@@ -158,7 +159,7 @@ test('groupNotifications shows the newest comment and names the mentions in it',
 });
 
 test('groupNotifications reads a comment from the comment table and skips a deleted comment', () => {
-  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2);
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2)!;
   assert.equal(sprint.preview, 'From the comment table');
 });
 
@@ -171,7 +172,7 @@ test('groupNotifications links to the discussion of the newest child notificatio
 });
 
 test('groupNotifications links to the discussion of the activity', () => {
-  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2);
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id === B2)!;
   assert.equal(sprint.path, '/p/a2000000000040008000000000000002?d=d2a00000000040008000000000000002');
 });
 
@@ -184,7 +185,7 @@ test('groupNotifications names each person once across the children of a grouped
 });
 
 test('groupNotifications leaves the actors empty when the notification has no activity', () => {
-  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id.startsWith('b2'));
+  const sprint = groupsFor(RULES_TEXT)[0].items.find((item) => item.id.startsWith('b2'))!;
   assert.deepEqual(sprint.actors, []);
 });
 
@@ -321,7 +322,7 @@ test('moveRow keeps the place of a database group that receives a moved row', ()
 
 test('moveTargets leaves out a database group that received a moved row', () => {
   const groups = moveRow(groupsFor(''), TEAM_WIKI_PAGE, 'Roadmap', []);
-  const tasksRow = groups.find((group) => group.name === 'Tasks').items[0];
+  const tasksRow = groups.find((group) => group.name === 'Tasks')!.items[0];
   assert.deepEqual(moveTargets(groups, tasksRow, 'Tasks'), []);
 });
 
@@ -332,13 +333,13 @@ test('moveRow leaves the groups unchanged when a reload has removed the page', (
 
 test('moveTargets lists the custom groups without Action needed', () => {
   const groups = groupsFor(RULES_TEXT, { ...movedTo(fixLoginRow(), 'Waiting'), ...flagged(planningRow()) });
-  const tasksRow = groups.find((group) => group.name === 'Tasks').items[0];
+  const tasksRow = groups.find((group) => group.name === 'Tasks')!.items[0];
   assert.deepEqual(moveTargets(groups, tasksRow, 'Tasks'), ['Waiting']);
 });
 
 test('moveTargets offers the usual group for a row in a custom group, and leaves out the current group', () => {
   const groups = groupsFor(RULES_TEXT, { ...movedTo(fixLoginRow(), 'Waiting'), ...movedTo(planningRow(), 'Review') });
-  const waitingRow = groups.find((group) => group.name === 'Waiting').items[0];
+  const waitingRow = groups.find((group) => group.name === 'Waiting')!.items[0];
   assert.deepEqual(moveTargets(groups, waitingRow, 'Waiting'), ['Review', 'Engineering']);
 });
 
@@ -354,7 +355,7 @@ test('withUnreadIds restores the unread notifications of a row', () => {
 });
 
 test('groupNotifications gives each notification without a page its own row in Other', () => {
-  const entry = (id) => ({ value: { value: { id, read: true, end_time: '1', type: 'space-update' } } });
+  const entry = (id: string) => ({ value: { value: { id, read: true, end_time: '1', type: 'space-update' } } });
   const [other] = groupNotifications(
     { notificationIds: ['x1', 'x2'], recordMap: { notification: { x1: entry('x1'), x2: entry('x2') } } },
     [],
@@ -369,13 +370,13 @@ test('groupNotifications joins the rich-text parts of a title', () => {
 });
 
 test('groupNotifications shows Untitled when the page record is missing', () => {
-  const missing = groupsFor(RULES_TEXT)[3].items.find((item) => item.id.startsWith('b6'));
+  const missing = groupsFor(RULES_TEXT)[3].items.find((item) => item.id.startsWith('b6'))!;
   assert.equal(missing.title, 'Untitled');
 });
 
 test('groupNotifications gives a row outside a database no database', () => {
-  const other = groupsFor('').find((group) => group.name === 'Other');
-  assert.equal(other.items.find((item) => item.pageKey === TEAM_WIKI_PAGE).database, null);
+  const other = groupsFor('').find((group) => group.name === 'Other')!;
+  assert.equal(other.items.find((item) => item.pageKey === TEAM_WIKI_PAGE)!.database, null);
 });
 
 test('setRule adds a rule for a database without one', () => {
@@ -414,9 +415,9 @@ test('databaseMoveTargets leaves out Action needed', () => {
 
 test('regroup applies a new rule to the shown rows and keeps a moved row where it is', () => {
   const rulesText = `${TASKS_ONE} = Roadmap`;
-  const q1Notes = groupsFor('').flatMap((group) => group.items).find((item) => item.pageKey === Q1_NOTES_PAGE);
+  const q1Notes = groupsFor('').flatMap((group) => group.items).find((item) => item.pageKey === Q1_NOTES_PAGE)!;
   const shown = moveRow(groupsFor(''), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, []);
-  const placement = (groups) => groups.map((group) => [group.name, group.items.map((item) => `${item.title}:${item.homeGroup}`)]);
+  const placement = (groups: Group[]) => groups.map((group) => [group.name, group.items.map((item) => `${item.title}:${item.homeGroup}`)]);
   assert.deepEqual(
     placement(regroup(shown, parseRules(rulesText))),
     placement(groupsFor(rulesText, movedTo(q1Notes, ACTION_NEEDED_GROUP))),

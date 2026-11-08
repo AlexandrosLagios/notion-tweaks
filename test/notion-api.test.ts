@@ -1,8 +1,8 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { spacesOf } = require('../src/notion-api.js');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spacesOf } from '../src/notion-api.ts';
 
-const space = (name) => ({ spaceId: 'x', value: { value: { name }, role: 'editor' } });
+const space = (name: string) => ({ spaceId: 'x', value: { value: { name }, role: 'editor' } });
 const spacesByUser = {
   u1: { space: { s1: space('Work'), s2: space('Personal') } },
   u2: { space: { s3: space('Other account') } },

@@ -1,15 +1,15 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { existsSync } = require('node:fs');
-const path = require('node:path');
-const manifest = require('../manifest.json');
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import manifest from '../manifest.json' with { type: 'json' };
 
 test('the manifest declares no content scripts, because Chrome freezes them at the last extension reload', () => {
-  assert.equal(manifest.content_scripts, undefined);
+  assert.equal('content_scripts' in manifest, false);
 });
 
 test('the manifest points the side panel at a page that exists', () => {
-  assert.equal(existsSync(path.join(__dirname, '..', manifest.side_panel.default_path)), true);
+  assert.equal(existsSync(path.join(import.meta.dirname, '..', manifest.side_panel.default_path)), true);
 });
 
 test('the manifest asks for no cookies permission, because the Chrome Web Store reviews that permission as sensitive', () => {
@@ -19,7 +19,7 @@ test('the manifest asks for no cookies permission, because the Chrome Web Store 
 test('the manifest points at icons that exist', () => {
   const icons = Object.values(manifest.icons);
   assert.equal(icons.length, 4);
-  icons.forEach((icon) => assert.equal(existsSync(path.join(__dirname, '..', icon)), true, icon));
+  icons.forEach((icon) => assert.equal(existsSync(path.join(import.meta.dirname, '..', icon)), true, icon));
 });
 
 test('the manifest name does not start with the Notion trademark', () => {

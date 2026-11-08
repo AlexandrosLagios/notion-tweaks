@@ -6,11 +6,12 @@ The extension adds a Chrome side panel for the Notion web app at `https://app.no
 
 ## Install
 
-1. Open `chrome://extensions` in Chrome.
-2. Turn on "Developer mode".
-3. Select "Load unpacked", and select this directory.
+1. Run `npm run build`. The script writes the extension to `build/`.
+2. Open `chrome://extensions` in Chrome.
+3. Turn on "Developer mode".
+4. Select "Load unpacked", and select the `build/` directory.
 
-After a change to `manifest.json`, `src/background.js`, or `src/notion-api.js`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
+After a change, run `npm run build` again. After a change to `manifest.json`, `src/background.ts`, or `src/notion-api.ts`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
 
 ## Groups
 
@@ -62,26 +63,28 @@ The panel shows the last list at once when it opens, with "Updating…" in the h
 ## Publish
 
 1. Update `version` in `manifest.json`.
-2. Run `scripts/package.sh`. The script writes the ZIP to `dist/`.
+2. Run `scripts/package.sh`. The script builds the extension and writes the ZIP to `dist/`.
 3. Upload the ZIP in the Chrome Developer Dashboard. `store/listing.md` holds the text for each field.
 
 ## Test
 
-Run the unit tests with Node.js 22 or later:
+The source is TypeScript. Node.js runs the tests on the `.ts` files directly, and `tsc` checks the types. Run the checks with Node.js 26 or later:
 
 ```sh
-node --test
+npm install
+npm test
+npm run check
 ```
 
-The unit tests cover `src/grouping.js` and `manifest.json`. Do the manual check below after a change to `src/notion-api.js`, `src/panel.js`, or `src/sidepanel.js`:
+The unit tests cover `src/grouping.ts` and `manifest.json`. Do the manual check below after a change to `src/notion-api.ts`, `src/panel.ts`, or `src/sidepanel.ts`:
 
-1. Load the unpacked extension, and open the panel.
+1. Run `npm run build`, load `build/` as an unpacked extension, and open the panel.
 2. Select a row. Make sure that the Notion tab opens the page without a reload.
 3. Archive a row. Find the notification in the "Archived" filter of the native Notion inbox.
 4. Select "Undo". Make sure that the notification returns to the native Notion inbox.
 5. Select "Move" on a row, and create a group. Close the panel, and open the panel again. Make sure that the row stays in the group.
 
-Do these checks too after a change to `src/background.js` or `src/sidepanel.js`:
+Do these checks too after a change to `src/background.ts` or `src/sidepanel.ts`:
 
 1. Close the panel, and wait one minute. Make sure that the toolbar icon shows the unread count.
 2. Open the panel. Make sure that the last list shows at once, with "Updating…" in the header.

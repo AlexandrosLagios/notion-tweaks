@@ -1,0 +1,15 @@
+{
+  "name": "notion-tweaks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --disable-warning=ExperimentalWarning scripts/build.mjs",
+    "check": "tsc",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

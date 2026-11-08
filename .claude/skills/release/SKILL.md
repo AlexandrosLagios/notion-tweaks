@@ -51,8 +51,8 @@ The version must be higher than the last tag, or the dashboard rejects the ZIP. 
 
 ## 4. Test
 
-1. Run `node --test` in `$root`. Stop on any failure.
-2. Ask the user to reload the unpacked extension and do the manual check in `README.md`. Browser tools cannot open extension pages, so an agent cannot do this check.
+1. Run `npm test` and `npm run check` in `$root`. Stop on any failure.
+2. Run `npm run build` in `$root`. Ask the user to reload the unpacked extension from `build/` and do the manual check in `README.md`. Browser tools cannot open extension pages, so an agent cannot do this check.
 3. Wait for the answer, unless the user already confirmed the check for this code.
 
 ## 5. Build and push
@@ -61,7 +61,7 @@ The version must be higher than the last tag, or the dashboard rejects the ZIP. 
 2. Run the command below. Replace `X.Y.Z` with the new version.
 
 ```sh
-cd "$root" && [ "$(git branch --show-current)" = main ] && node --test 2>&1 | grep -E '^ℹ fail 0$' && "$root/scripts/package.sh" && python3 -c "import json,zipfile; assert json.loads(zipfile.ZipFile('$root/dist/inbox-tweaks-for-notion-X.Y.Z.zip').read('manifest.json'))['version'] == 'X.Y.Z'" && git add manifest.json && git commit -m "chore: release X.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
+cd "$root" && [ "$(git branch --show-current)" = main ] && node --test 2>&1 | grep -E '^ℹ fail 0$' && npm run --silent check && "$root/scripts/package.sh" && python3 -c "import json,zipfile; assert json.loads(zipfile.ZipFile('$root/dist/inbox-tweaks-for-notion-X.Y.Z.zip').read('manifest.json'))['version'] == 'X.Y.Z'" && git add manifest.json && git commit -m "chore: release X.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
 ```
 
 Commit changes from step 2 in earlier commits, so that this commit holds only the version.
