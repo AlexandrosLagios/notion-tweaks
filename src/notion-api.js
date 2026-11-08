@@ -9,6 +9,7 @@ const NotionTweaksApi = (() => {
   const UNREAD_COUNT_REQUEST_SIZE = 20;
   const IN_PLACE_TIMEOUT_MS = 5000;
   const HTTP_UNAUTHORIZED = 401;
+  const MAX_BADGE_COUNT = 99;
 
   const pageUrl = (path) => `${NOTION_ORIGIN}${path}`;
 
@@ -64,15 +65,17 @@ const NotionTweaksApi = (() => {
     }
   }
 
-  async function findSpaceId(userId) {
-    const spacesByUser = await post('getSpaces', {});
+  function spacesOf(spacesByUser, userId) {
     const user = spacesByUser[userId] ?? Object.values(spacesByUser)[0];
-    // ponytail: first space of the active user; add a space picker when an account has several.
-    const [spaceId] = Object.keys(user?.space ?? {});
-    if (!spaceId) {
+    return Object.entries(user?.space ?? {}).map(([id, entry]) => ({ id, name: entry.value?.value?.name ?? id }));
+  }
+
+  async function listSpaces(userId) {
+    const spaces = spacesOf(await post('getSpaces', {}), userId);
+    if (!spaces.length) {
       throw new SignedOutError();
     }
-    return spaceId;
+    return spaces;
   }
 
   async function loadNotifications(spaceId, size, type) {
@@ -92,6 +95,23 @@ const NotionTweaksApi = (() => {
     const { results } = await post('getUserNotificationsInitial', { spaceId, size: UNREAD_COUNT_REQUEST_SIZE });
     // ponytail: only `mentions` moved in the probe, for all four notification types; add the other counts if the badge falls short.
     return results[0].unread.mentions;
+  }
+
+  const badgeText = (count) => (count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : String(count || ''));
+
+  // Sets the toolbar badge, and passes the count to an open panel through chrome.storage.session.
+  async function updateUnreadCount(spaceId) {
+    try {
+      const count = await loadUnreadCount(spaceId);
+      await Promise.all([
+        chrome.action.setBadgeText({ text: badgeText(count) }),
+        chrome.storage.session.set({ unreadCount: count }),
+      ]);
+    } catch (error) {
+      chrome.action.setBadgeText({ text: '' });
+      chrome.storage.session.remove('unreadCount');
+      throw error;
+    }
   }
 
   function updateNotifications(spaceId, changes) {
@@ -178,12 +198,17 @@ const NotionTweaksApi = (() => {
     INBOX_TYPE,
     pageUrl,
     activeUserId,
-    findSpaceId,
+    spacesOf,
+    listSpaces,
     loadNotifications,
-    loadUnreadCount,
+    updateUnreadCount,
     archiveNotifications,
     restoreNotifications,
     markNotificationsRead,
     openPage,
   };
 })();
+
+if (typeof module !== 'undefined') {
+  module.exports = NotionTweaksApi;
+}

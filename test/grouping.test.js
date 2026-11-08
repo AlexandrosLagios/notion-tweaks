@@ -7,6 +7,9 @@ const {
   groupNotifications,
   moveRow,
   moveTargets,
+  databaseMoveTargets,
+  setRule,
+  regroup,
   markArchived,
   withUnreadIds,
 } = require('../src/grouping.js');
@@ -31,8 +34,10 @@ const RULES_TEXT = [
   `https://app.notion.com/p/acme/Roadmap-${ROADMAP} = Planning`,
 ].join('\n');
 
+const TASKS_DATABASE = { databaseId: TASKS_ONE, collectionId: '111111111111411181111111111111c1', databaseName: 'Tasks' };
+
 const notification = (id) => log.recordMap.notification[id].value.value;
-const groupsFor = (rulesText, movedRows = {}) => groupNotifications(log, parseRules(rulesText).rules, movedRows);
+const groupsFor = (rulesText, movedRows = {}) => groupNotifications(log, parseRules(rulesText), movedRows);
 const groupNames = (groups) => groups.map((group) => group.name);
 const fixLoginRow = () => groupsFor(RULES_TEXT)[0].items[0];
 const planningRow = () => groupsFor(RULES_TEXT)[1].items[0];
@@ -41,39 +46,27 @@ const movedTo = (row, group) => ({ [row.pageKey]: { ...row, movedTo: group } });
 const itemIds = (group) => group.items.map((item) => item.id.slice(0, 2));
 
 test('parseRules takes the database id from the URL path, not the view id in the query', () => {
-  assert.equal(parseRules(RULES_TEXT).rules[0].databaseId, TASKS_ONE);
+  assert.equal(parseRules(RULES_TEXT)[0].databaseId, TASKS_ONE);
 });
 
 test('parseRules accepts a dashed id and keeps the line order', () => {
-  assert.deepEqual(parseRules(RULES_TEXT).rules, [
+  assert.deepEqual(parseRules(RULES_TEXT), [
     { databaseId: TASKS_ONE, group: 'Engineering' },
     { databaseId: TASKS_TWO, group: 'Engineering' },
     { databaseId: ROADMAP, group: 'Planning' },
   ]);
 });
 
-test('parseRules ignores blank lines', () => {
-  assert.deepEqual(parseRules(RULES_TEXT).errors, []);
-});
-
 test('parseRules keeps the first rule when a database repeats', () => {
-  assert.deepEqual(parseRules(`${ROADMAP} = First\n${ROADMAP} = Second`).rules, [
+  assert.deepEqual(parseRules(`${ROADMAP} = First\n${ROADMAP} = Second`), [
     { databaseId: ROADMAP, group: 'First' },
   ]);
 });
 
-test('parseRules reports a line without "="', () => {
-  assert.deepEqual(parseRules(`${ROADMAP} Planning`).errors, [{ line: 1, reason: 'missing "="' }]);
-});
-
-test('parseRules reports a line without a database id', () => {
-  assert.deepEqual(parseRules(`${ROADMAP} = Planning\nRoadmap = Planning`).errors, [
-    { line: 2, reason: 'no database id' },
+test('parseRules skips a line without "=", without a database id, or without a group name', () => {
+  assert.deepEqual(parseRules(`${ROADMAP} Planning\nRoadmap = Planning\n${ROADMAP} = \n${TASKS_TWO} = Kept`), [
+    { databaseId: TASKS_TWO, group: 'Kept' },
   ]);
-});
-
-test('parseRules reports a line without a group name', () => {
-  assert.deepEqual(parseRules(`${ROADMAP} = `).errors, [{ line: 1, reason: 'no group name' }]);
 });
 
 test('resolveDatabaseId finds the database of a page in a database', () => {
@@ -156,6 +149,7 @@ test('groupNotifications describes each row for the panel', () => {
     actors: ['Status Sync', 'Maria Doe'],
     preview: 'Please check',
     endTime: 7000,
+    database: TASKS_DATABASE,
   });
 });
 
@@ -247,18 +241,18 @@ test('groupNotifications keeps the usual group of a flagged row', () => {
 });
 
 test('moveRow moves a row to Action needed and recounts both groups', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT));
   assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Planning', 'Tasks', 'Other']);
   assert.deepEqual([groups[0].unread, groups[1].unread], [1, 0]);
 });
 
 test('moveRow drops a group that becomes empty', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT));
   assert.deepEqual(groupNames(groups), [ACTION_NEEDED_GROUP, 'Engineering', 'Tasks', 'Other']);
 });
 
 test('moveRow returns a row to its usual group in rule order and date order', () => {
-  const rules = parseRules(RULES_TEXT).rules;
+  const rules = parseRules(RULES_TEXT);
   const original = groupsFor(RULES_TEXT);
   const moved = moveRow(original, FIX_LOGIN_PAGE, ACTION_NEEDED_GROUP, rules);
   const returned = moveRow(moved, FIX_LOGIN_PAGE, 'Engineering', rules);
@@ -267,7 +261,7 @@ test('moveRow returns a row to its usual group in rule order and date order', ()
 });
 
 test('moveRow to the current group keeps one copy of the row', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Engineering', parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Engineering', parseRules(RULES_TEXT));
   assert.deepEqual(itemIds(groups[0]), ['b7', 'b2']);
 });
 
@@ -296,26 +290,26 @@ test('groupNotifications keeps a moved row in its custom group when Notion retur
 });
 
 test('moveRow moves a row to a new custom group and records the group on the row', () => {
-  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', parseRules(RULES_TEXT).rules);
+  const groups = moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', parseRules(RULES_TEXT));
   assert.deepEqual(groupNames(groups), ['Waiting', 'Engineering', 'Planning', 'Tasks', 'Other']);
   assert.equal(groups[0].items[0].movedTo, 'Waiting');
 });
 
 test('moveRow to the usual group clears the custom group from the row', () => {
-  const rules = parseRules(RULES_TEXT).rules;
+  const rules = parseRules(RULES_TEXT);
   const groups = moveRow(moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', rules), FIX_LOGIN_PAGE, 'Engineering', rules);
   assert.deepEqual(groupNames(groups), ['Engineering', 'Planning', 'Tasks', 'Other']);
   assert.equal('movedTo' in groups[0].items[0], false);
 });
 
 test('moveRow drops a custom group when the last row leaves', () => {
-  const rules = parseRules(RULES_TEXT).rules;
+  const rules = parseRules(RULES_TEXT);
   const groups = moveRow(moveRow(groupsFor(RULES_TEXT), FIX_LOGIN_PAGE, 'Waiting', rules), FIX_LOGIN_PAGE, 'Review', rules);
   assert.deepEqual(groupNames(groups), ['Review', 'Engineering', 'Planning', 'Tasks', 'Other']);
 });
 
 test('moveRow keeps the place of a rule group that receives a moved row', () => {
-  const rules = parseRules(RULES_TEXT).rules;
+  const rules = parseRules(RULES_TEXT);
   const groups = moveRow(groupsFor(RULES_TEXT), TEAM_WIKI_PAGE, 'Planning', rules);
   assert.deepEqual(groupNames(groups), ['Engineering', 'Planning', 'Tasks', 'Other']);
 });
@@ -333,7 +327,7 @@ test('moveTargets leaves out a database group that received a moved row', () => 
 
 test('moveRow leaves the groups unchanged when a reload has removed the page', () => {
   const original = groupsFor(RULES_TEXT);
-  assert.deepEqual(moveRow(original, 'removed-page', 'Waiting', parseRules(RULES_TEXT).rules), original);
+  assert.deepEqual(moveRow(original, 'removed-page', 'Waiting', parseRules(RULES_TEXT)), original);
 });
 
 test('moveTargets lists the custom groups without Action needed', () => {
@@ -377,4 +371,54 @@ test('groupNotifications joins the rich-text parts of a title', () => {
 test('groupNotifications shows Untitled when the page record is missing', () => {
   const missing = groupsFor(RULES_TEXT)[3].items.find((item) => item.id.startsWith('b6'));
   assert.equal(missing.title, 'Untitled');
+});
+
+test('groupNotifications gives a row outside a database no database', () => {
+  const other = groupsFor('').find((group) => group.name === 'Other');
+  assert.equal(other.items.find((item) => item.pageKey === TEAM_WIKI_PAGE).database, null);
+});
+
+test('setRule adds a rule for a database without one', () => {
+  assert.equal(setRule('', TASKS_DATABASE, 'Engineering'), `${TASKS_ONE} = Engineering`);
+});
+
+test('setRule replaces the rule of the database in place and keeps the other rules', () => {
+  assert.deepEqual(parseRules(setRule(RULES_TEXT, TASKS_DATABASE, 'Backend')), [
+    { databaseId: TASKS_ONE, group: 'Backend' },
+    { databaseId: TASKS_TWO, group: 'Engineering' },
+    { databaseId: ROADMAP, group: 'Planning' },
+  ]);
+});
+
+test('setRule replaces a rule that names the collection id', () => {
+  assert.equal(setRule(`${TASKS_DATABASE.collectionId} = Old`, TASKS_DATABASE, 'New'), `${TASKS_ONE} = New`);
+});
+
+test('setRule removes the rule when the group is the database name', () => {
+  const rules = parseRules(setRule(RULES_TEXT, TASKS_DATABASE, 'Tasks'));
+  assert.deepEqual(rules.map((rule) => rule.databaseId), [TASKS_TWO, ROADMAP]);
+});
+
+test('parseRules keeps an equals sign in a group name that the panel wrote', () => {
+  assert.deepEqual(parseRules(setRule('', TASKS_DATABASE, 'a = b')), [{ databaseId: TASKS_ONE, group: 'a = b' }]);
+});
+
+test('databaseMoveTargets offers the other groups and the database name', () => {
+  assert.deepEqual(databaseMoveTargets(groupsFor(RULES_TEXT), fixLoginRow()), ['Planning', 'Tasks']);
+});
+
+test('databaseMoveTargets leaves out Action needed', () => {
+  const groups = moveRow(groupsFor(RULES_TEXT), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, parseRules(RULES_TEXT));
+  assert.deepEqual(databaseMoveTargets(groups, fixLoginRow()), ['Tasks']);
+});
+
+test('regroup applies a new rule to the shown rows and keeps a moved row where it is', () => {
+  const rulesText = `${TASKS_ONE} = Roadmap`;
+  const q1Notes = groupsFor('').flatMap((group) => group.items).find((item) => item.pageKey === Q1_NOTES_PAGE);
+  const shown = moveRow(groupsFor(''), Q1_NOTES_PAGE, ACTION_NEEDED_GROUP, []);
+  const placement = (groups) => groups.map((group) => [group.name, group.items.map((item) => `${item.title}:${item.homeGroup}`)]);
+  assert.deepEqual(
+    placement(regroup(shown, parseRules(rulesText))),
+    placement(groupsFor(rulesText, movedTo(q1Notes, ACTION_NEEDED_GROUP))),
+  );
 });

@@ -10,7 +10,7 @@ The extension adds a Chrome side panel for the Notion web app at `https://app.no
 2. Turn on "Developer mode".
 3. Select "Load unpacked", and select this directory.
 
-After a change to `manifest.json` or `src/background.js`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
+After a change to `manifest.json`, `src/background.js`, or `src/notion-api.js`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
 
 ## Groups
 
@@ -28,16 +28,14 @@ To add another row, point to the row, select "Move", and select the group. To re
 
 A custom group works like the "Action needed" section. The group shows under both filters, and also when the row is older than the loaded list. "Archive" removes the row from the group, and "Undo" returns the row. A custom group exists only in this Chrome profile. The custom groups show after "Action needed" and before the other groups, in name order.
 
-### Add database rules
+### Move a whole database
 
-A rule sends all the notifications of a database to a group. A rule can also separate two databases with the same name.
+A database rule sends all the notifications of a database to a group. A rule can also separate two databases with the same name.
 
-1. Open the extension options from `chrome://extensions`.
-2. Write one rule per line: `<database URL or id> = <group name>`.
-3. Select "Save".
-4. Select "Reload" in the panel.
+1. Point to a row of the database, and select "Move".
+2. Under "All of <database>", select a group, or select "New group…".
 
-Copy the database URL from the address bar of the full-page database. The options page does not save a line without `=`, without a database id, or without a group name. Several databases can share one group name. The line order sets the group order.
+All the rows of the database move at once. To remove the rule, select "Move", and select the database name under "All of <database>". Several databases can share one group. The rule groups show in the order that you create the rules. The rules are in `chrome.storage.sync`, so Chrome sync copies the rules to your other Chrome browsers. A row outside a database has no "All of" section.
 
 ## Use the panel
 
@@ -47,6 +45,7 @@ Copy the database URL from the address bar of the full-page database. The option
 4. To archive one row, point to the row, and select "Archive".
 5. To archive a group, select "Archive" in the group header, and then select "Archive <count>?" within 3 seconds.
 6. To show only the unread notifications, select "Unread" in the header. The panel keeps the selection.
+7. To show another workspace, select the workspace in the header. The menu shows only when your account has two or more workspaces. The panel keeps the selection for each Notion account. After you join a workspace, select "Reload" to show the workspace in the menu.
 
 To collect the notifications that need your action, point to a row, and select "Action". The row moves to the "Action needed" section at the top. A new comment on that page joins the row. To take the row out of the section, select "No action", or archive the row.
 
@@ -56,7 +55,9 @@ A row holds all the notifications of one page. The row shows who acted and the t
 
 An archived row dims at once and stays in place, so the other rows do not move under the pointer. "Undo" restores the row and its read state. "Reload" removes the archived rows. When Notion rejects a request, the row returns to the earlier state and an error line shows below the group header.
 
-The badge next to the title shows the number of unread notifications. The badge loads separately, so the list does not wait for the badge.
+The toolbar icon and the badge next to the title show the number of unread notifications. The extension checks the count every minute, also when the panel is closed. The count is for the workspace that the panel showed last.
+
+The panel shows the last list at once when it opens, with "Updating…" in the header, and then loads the current list. When the unread count goes up, the panel loads the list again. The panel waits until the pointer leaves the panel, so the list does not change under the pointer. Like "Reload", this load removes the archived rows.
 
 ## Publish
 
@@ -79,3 +80,9 @@ The unit tests cover `src/grouping.js` and `manifest.json`. Do the manual check 
 3. Archive a row. Find the notification in the "Archived" filter of the native Notion inbox.
 4. Select "Undo". Make sure that the notification returns to the native Notion inbox.
 5. Select "Move" on a row, and create a group. Close the panel, and open the panel again. Make sure that the row stays in the group.
+
+Do these checks too after a change to `src/background.js` or `src/sidepanel.js`:
+
+1. Close the panel, and wait one minute. Make sure that the toolbar icon shows the unread count.
+2. Open the panel. Make sure that the last list shows at once, with "Updating…" in the header.
+3. Select "Move" on a row in a database, and select a group under "All of <database>". Make sure that all the rows of the database move.

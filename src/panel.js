@@ -84,23 +84,35 @@ const NotionTweaksPanel = (() => {
     });
   }
 
+  const moveOptions = (targets, onDatabase) => [
+    ...targets.map((name) => el('option', { value: name, textContent: name, onDatabase })),
+    el('option', { textContent: 'New group…', isNewGroup: true, onDatabase }),
+  ];
+
   // ponytail: one select per row; fill the options on focus if a long list renders slowly.
-  function moveAction(item, groupName, groups, { onMove }) {
-    const newGroup = el('option', { textContent: 'New group…' });
+  function moveAction(item, groupName, groups, { onMove, onMoveDatabase }) {
+    const pageOptions = moveOptions(NotionTweaksGrouping.moveTargets(groups, item, groupName), false);
     const select = el(
       'select',
       { ariaLabel: 'Move to a group' },
       el('option', { value: '', textContent: 'Move', hidden: true }),
-      ...NotionTweaksGrouping.moveTargets(groups, item, groupName).map((name) =>
-        el('option', { value: name, textContent: name }),
-      ),
-      newGroup,
+      ...(item.database
+        ? [
+            el('optgroup', { label: 'This page' }, ...pageOptions),
+            el(
+              'optgroup',
+              { label: `All of ${NotionTweaksGrouping.databaseGroupName(item.database)}` },
+              ...moveOptions(NotionTweaksGrouping.databaseMoveTargets(groups, item), true),
+            ),
+          ]
+        : pageOptions),
     );
     select.addEventListener('change', async () => {
-      const target = newGroup.selected ? await askGroupName() : select.value;
+      const [option] = select.selectedOptions;
+      const target = option.isNewGroup ? await askGroupName() : option.value;
       select.value = '';
       if (target) {
-        onMove(item, target);
+        (option.onDatabase ? onMoveDatabase : onMove)(item, target);
       }
     });
     return select;
@@ -240,16 +252,28 @@ const NotionTweaksPanel = (() => {
     return sections.length ? sections : [el('p', { textContent: 'No notifications.' })];
   }
 
-  function filterSelect(inboxType, onFilter) {
+  function choiceSelect(props, options, value, onChange) {
     const select = el(
       'select',
-      { ariaLabel: 'Status' },
-      ...FILTER_OPTIONS.map(({ value, label }) => el('option', { value, textContent: label })),
+      props,
+      ...options.map(({ value: optionValue, label }) => el('option', { value: optionValue, textContent: label })),
     );
-    select.value = inboxType;
-    select.addEventListener('change', () => onFilter(select.value));
+    select.value = value;
+    select.addEventListener('change', () => onChange(select.value));
     return select;
   }
+
+  const spaceSelect = (spaces, spaceId, onSpace) =>
+    spaces.length < 2
+      ? []
+      : [
+          choiceSelect(
+            { ariaLabel: 'Workspace', className: 'space' },
+            spaces.map(({ id, name }) => ({ value: id, label: name })),
+            spaceId,
+            onSpace,
+          ),
+        ];
 
   function render(view, handlers) {
     const reload = el('button', { textContent: 'Reload' });
@@ -272,7 +296,8 @@ const NotionTweaksPanel = (() => {
             hidden: !view.unreadCount,
           }),
         ),
-        filterSelect(view.inboxType, handlers.onFilter),
+        ...spaceSelect(view.spaces, view.spaceId, handlers.onSpace),
+        choiceSelect({ ariaLabel: 'Status' }, FILTER_OPTIONS, view.inboxType, handlers.onFilter),
         reload,
       ),
       ...body(view, handlers),
@@ -285,10 +310,22 @@ const NotionTweaksPanel = (() => {
   function showUnreadCount(count) {
     const badge = root.querySelector('.badge');
     if (badge) {
-      badge.textContent = count;
+      badge.textContent = count ?? '';
       badge.hidden = !count;
     }
   }
 
-  return { render, showUnreadCount };
+  // Swaps only the workspace menu, so the rows under the pointer stay in place.
+  function showSpaces(spaces, spaceId, onSpace) {
+    root.querySelector('header .space')?.remove();
+    root.querySelector('header strong')?.after(...spaceSelect(spaces, spaceId, onSpace));
+  }
+
+  // A full render replaces the element under the pointer or in focus.
+  const isBusy = () =>
+    root.matches(':hover') ||
+    newGroupDialog.open ||
+    (document.hasFocus() && document.activeElement instanceof HTMLSelectElement);
+
+  return { render, showUnreadCount, showSpaces, isBusy };
 })();

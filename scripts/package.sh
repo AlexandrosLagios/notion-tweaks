@@ -5,5 +5,5 @@ version=$(node -p "require('./manifest.json').version")
 archive="dist/inbox-tweaks-for-notion-$version.zip"
 mkdir -p dist
 rm -f "$archive"
-zip -qr "$archive" manifest.json sidepanel.html options.html src icons
+zip -qr "$archive" manifest.json sidepanel.html src icons
 echo "$archive"

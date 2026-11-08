@@ -67,41 +67,22 @@ const NotionTweaksGrouping = (() => {
       .trim();
   }
 
+  // A line without "=", a database id, or a group name gives no rule.
   function parseRules(text) {
     const rules = [];
-    const errors = [];
-    const seen = new Set();
-
-    text.split('\n').forEach((rawLine, index) => {
-      const line = index + 1;
-      if (!rawLine.trim()) {
-        return;
-      }
-      const separator = rawLine.lastIndexOf('=');
-      if (separator === -1) {
-        errors.push({ line, reason: 'missing "="' });
-        return;
-      }
+    text.split('\n').forEach((rawLine) => {
+      // The panel writes `<id> = <group>`, so a group name can hold "=".
+      const spacedSeparator = rawLine.indexOf(' = ');
+      const separator = spacedSeparator === -1 ? rawLine.lastIndexOf('=') : spacedSeparator + 1;
       const path = rawLine.slice(0, separator).trim().split(/[?#]/)[0];
-      const lastSegment = path.split('/').pop().replaceAll('-', '');
-      const match = lastSegment.match(DATABASE_ID_AT_END);
-      if (!match) {
-        errors.push({ line, reason: 'no database id' });
-        return;
-      }
+      const match = path.split('/').pop().replaceAll('-', '').match(DATABASE_ID_AT_END);
       const group = rawLine.slice(separator + 1).trim();
-      if (!group) {
-        errors.push({ line, reason: 'no group name' });
-        return;
-      }
-      const databaseId = match[1].toLowerCase();
-      if (!seen.has(databaseId)) {
-        seen.add(databaseId);
+      const databaseId = match?.[1].toLowerCase();
+      if (separator !== -1 && databaseId && group && !rules.some((rule) => rule.databaseId === databaseId)) {
         rules.push({ databaseId, group });
       }
     });
-
-    return { rules, errors };
+    return rules;
   }
 
   function resolveDatabaseId(recordMap, notification) {
@@ -158,7 +139,7 @@ const NotionTweaksGrouping = (() => {
       .find(Boolean);
   }
 
-  function toRow(recordMap, notifications, homeGroup) {
+  function toRow(recordMap, notifications, homeGroup, database) {
     const [newest] = notifications;
     const newestValue = (read) => notifications.map(read).find(Boolean) ?? null;
     const discussionId = newestValue((notification) => discussionIdOf(recordMap, notification));
@@ -176,15 +157,32 @@ const NotionTweaksGrouping = (() => {
       actors: [...new Set(notifications.flatMap((notification) => actorsOf(recordMap, notification)))],
       preview: newestValue((notification) => previewOf(recordMap, notification)),
       endTime: Number(newest.end_time),
+      database,
     };
   }
+
+  const databaseGroupName = (database) => database.databaseName || UNTITLED;
+
+  const isRuleFor = (database, rule) => [database.databaseId, database.collectionId].includes(rule?.databaseId);
+
+  const uniqueWithout = (names, excluded) => [...new Set(names)].filter((name) => name !== excluded);
 
   function groupNameOf(database, rules) {
     if (!database) {
       return OTHER_GROUP;
     }
-    const rule = rules.find((candidate) => [database.databaseId, database.collectionId].includes(candidate.databaseId));
-    return rule?.group ?? (database.databaseName || UNTITLED);
+    return rules.find((rule) => isRuleFor(database, rule))?.group ?? databaseGroupName(database);
+  }
+
+  function setRule(rulesText, database, group) {
+    const isRuleOf = (line) => isRuleFor(database, parseRules(line)[0]);
+    const lines = rulesText.split('\n').filter((line) => line.trim());
+    const position = lines.findIndex(isRuleOf);
+    const kept = lines.filter((line) => !isRuleOf(line));
+    if (group !== databaseGroupName(database)) {
+      kept.splice(position === -1 ? kept.length : position, 0, `${database.databaseId} = ${group}`);
+    }
+    return kept.join('\n');
   }
 
   function summarize(name, items) {
@@ -238,8 +236,8 @@ const NotionTweaksGrouping = (() => {
       .sort(byNewest);
     const pages = Map.groupBy(newestFirst, (notification) => notification.navigable_block_id ?? notification.id);
     const placedRows = [...pages.values()].map((notifications) => {
-      const homeGroup = groupNameOf(resolveDatabaseId(recordMap, notifications[0]), rules);
-      const row = toRow(recordMap, notifications, homeGroup);
+      const database = resolveDatabaseId(recordMap, notifications[0]);
+      const row = toRow(recordMap, notifications, groupNameOf(database, rules), database);
       const saved = movedRows[row.pageKey];
       return saved ? mergeSavedRow(saved, row) : row;
     });
@@ -247,9 +245,20 @@ const NotionTweaksGrouping = (() => {
     const savedOnlyRows = Object.values(movedRows)
       .filter((row) => !loadedPages.has(row.pageKey))
       .map((row) => ({ ...row, movedTo: savedGroupOf(row) }));
-    const rowsByGroup = Map.groupBy([...placedRows, ...savedOnlyRows], (row) => row.movedTo ?? row.homeGroup);
-    const groups = [...rowsByGroup].map(([name, rows]) => summarize(name, rows.sort(byNewestRow)));
-    return sortGroups(groups, rules);
+    return groupRows([...placedRows, ...savedOnlyRows], rules);
+  }
+
+  function groupRows(rows, rules) {
+    const rowsByGroup = Map.groupBy(rows, (row) => row.movedTo ?? row.homeGroup);
+    return sortGroups([...rowsByGroup].map(([name, items]) => summarize(name, items.sort(byNewestRow))), rules);
+  }
+
+  // Applies changed rules to the shown rows. A row outside a database, or saved before rows held their database, stays in its group.
+  function regroup(groups, rules) {
+    const rows = groups
+      .flatMap((group) => group.items)
+      .map((row) => (row.database ? { ...row, homeGroup: groupNameOf(row.database, rules) } : row));
+    return groupRows(rows, rules);
   }
 
   function moveRow(groups, pageKey, targetName, rules) {
@@ -267,7 +276,12 @@ const NotionTweaksGrouping = (() => {
 
   function moveTargets(groups, item, currentGroup) {
     const customGroups = groups.filter(isCustomGroup).map(({ name }) => name);
-    return [...new Set([...customGroups, item.homeGroup])].filter((name) => name !== currentGroup);
+    return uniqueWithout([...customGroups, item.homeGroup], currentGroup);
+  }
+
+  function databaseMoveTargets(groups, item) {
+    const names = groups.map(({ name }) => name).filter((name) => name !== ACTION_NEEDED_GROUP && name !== OTHER_GROUP);
+    return uniqueWithout([...names, databaseGroupName(item.database)], item.homeGroup);
   }
 
   function markArchived(groups, archivedIds) {
@@ -285,6 +299,10 @@ const NotionTweaksGrouping = (() => {
     groupNotifications,
     moveRow,
     moveTargets,
+    databaseMoveTargets,
+    databaseGroupName,
+    setRule,
+    regroup,
     markArchived,
     withUnreadIds,
   };

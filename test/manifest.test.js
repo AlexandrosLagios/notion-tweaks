@@ -25,3 +25,7 @@ test('the manifest points at icons that exist', () => {
 test('the manifest name does not start with the Notion trademark', () => {
   assert.equal(manifest.name.startsWith('Notion'), false);
 });
+
+test('the manifest asks only for permissions without an install warning, so an update keeps the extension turned on', () => {
+  assert.deepEqual([...manifest.permissions].sort(), ['alarms', 'scripting', 'sidePanel', 'storage']);
+});
