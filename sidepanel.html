@@ -50,6 +50,11 @@
       dialog input { box-sizing: border-box; width: 100%; padding: 4px 8px; font-size: 14px; cursor: text; }
       .space { min-width: 0; max-width: 40%; text-overflow: ellipsis; }
       .dialog-actions { display: flex; flex-direction: row-reverse; gap: 8px; margin-top: 10px; }
+      dialog textarea { box-sizing: border-box; width: 100%; margin-bottom: 8px; padding: 4px 8px; font: inherit; color: inherit; background: transparent; border-radius: 4px; border: 1px solid light-dark(#37352f33, #ffffff33); resize: vertical; }
+      .dialog-title { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
+      li.can-reply { min-height: 80px; }
+      .scheduled > summary > span:first-child { color: #d9730d; }
+      li.overdue::before, li.failed::before { content: ''; position: absolute; left: 5px; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: #d9730d; }
     </style>
   </head>
   <body>
@@ -60,6 +65,20 @@
         <input id="new-group-name" required pattern=".*\S.*" autocomplete="off" />
         <div class="dialog-actions">
           <button value="create">Create</button>
+          <button value="" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="reply-later">
+      <form method="dialog">
+        <p class="dialog-title"></p>
+        <label for="reply-text">Reply</label>
+        <textarea id="reply-text" rows="4" required></textarea>
+        <label for="reply-send-at">Send at</label>
+        <input id="reply-send-at" type="datetime-local" required />
+        <p class="error" hidden></p>
+        <div class="dialog-actions">
+          <button value="schedule">Schedule</button>
           <button value="" formnovalidate>Cancel</button>
         </div>
       </form>

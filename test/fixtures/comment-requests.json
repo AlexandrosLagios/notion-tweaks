@@ -1,0 +1,475 @@
+{
+  "page-comment": {
+    "endpoint": "saveTransactionsFanout",
+    "headers": {
+      "x-notion-active-user-header": "00000000-0000-4000-8000-000000000001",
+      "x-notion-space-id": "00000000-0000-4000-8000-000000000002"
+    },
+    "body": {
+      "requestId": "00000000-0000-4000-8000-000000000003",
+      "transactions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000004",
+          "spaceId": "00000000-0000-4000-8000-000000000002",
+          "debug": {
+            "userAction": "PageDiscussion.useSubmitNewDiscussion",
+            "clientCommitTimeMs": 1794215958530
+          },
+          "operations": [
+            {
+              "pointer": {
+                "table": "discussion",
+                "id": "00000000-0000-4000-8000-000000000005",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "command": "update",
+              "args": {
+                "type": "default",
+                "parent_id": "00000000-0000-4000-8000-000000000006",
+                "parent_table": "block",
+                "resolved": false,
+                "space_id": "00000000-0000-4000-8000-000000000002"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000007",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "command": "set",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000007",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "alive": true,
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "created_time": 1794215958526,
+                "last_edited_time": 1794215958526,
+                "version": 1
+              }
+            },
+            {
+              "pointer": {
+                "table": "discussion",
+                "id": "00000000-0000-4000-8000-000000000005",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "comments"
+              ],
+              "command": "listAfter",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000007"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000007",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "text"
+              ],
+              "command": "set",
+              "args": [
+                [
+                  "test 1"
+                ]
+              ]
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000008",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "last_seen_at": 1794215958528
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000008",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "subscription_state": "subscribed"
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000006",
+                "table": "block",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "discussions"
+              ],
+              "command": "listAfter",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000005"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000007",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "created_by_id": "00000000-0000-4000-8000-000000000001",
+                "created_by_table": "notion_user"
+              },
+              "command": "update"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reply": {
+    "endpoint": "saveTransactionsFanout",
+    "headers": {
+      "x-notion-active-user-header": "00000000-0000-4000-8000-000000000001",
+      "x-notion-space-id": "00000000-0000-4000-8000-000000000002"
+    },
+    "body": {
+      "requestId": "00000000-0000-4000-8000-000000000009",
+      "transactions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "spaceId": "00000000-0000-4000-8000-000000000002",
+          "debug": {
+            "userAction": "Discussion.handleSubmitReply",
+            "clientCommitTimeMs": 1794215961689
+          },
+          "operations": [
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000011",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "command": "set",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000011",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "alive": true,
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "created_time": 1794215961688,
+                "last_edited_time": 1794215961688,
+                "version": 1
+              }
+            },
+            {
+              "pointer": {
+                "table": "discussion",
+                "id": "00000000-0000-4000-8000-000000000005",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "comments"
+              ],
+              "command": "listAfter",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000011"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000011",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "text"
+              ],
+              "command": "set",
+              "args": [
+                [
+                  "test 2"
+                ]
+              ]
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000008",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "last_seen_at": 1794215961688
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000008",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "subscription_state": "subscribed"
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000008",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000005",
+                "parent_table": "discussion",
+                "last_seen_at": 1794215961688
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000011",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "created_by_id": "00000000-0000-4000-8000-000000000001",
+                "created_by_table": "notion_user",
+                "last_edited_time": 1794215961689
+              },
+              "command": "update"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "selected-text-comment": {
+    "endpoint": "saveTransactionsFanout",
+    "headers": {
+      "x-notion-active-user-header": "00000000-0000-4000-8000-000000000001",
+      "x-notion-space-id": "00000000-0000-4000-8000-000000000002"
+    },
+    "body": {
+      "requestId": "00000000-0000-4000-8000-000000000012",
+      "transactions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000013",
+          "spaceId": "00000000-0000-4000-8000-000000000002",
+          "debug": {
+            "userAction": "newDiscussionMenuActions.submitNewDiscussion",
+            "clientCommitTimeMs": 1794216078776
+          },
+          "operations": [
+            {
+              "command": "addAnnotation",
+              "pointer": {
+                "table": "block",
+                "id": "00000000-0000-4000-8000-000000000014",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "opVersion": 2,
+              "args": {
+                "type": "addAnnotation",
+                "textInstanceId": "HjDCX6JnHv-dLqdy8vjcXQ",
+                "searchLabel": "",
+                "id": [
+                  "NgIaj867hUgQ",
+                  10
+                ],
+                "start": {
+                  "id": [
+                    "NgIaj867hUgQ",
+                    1
+                  ],
+                  "anchor": "before"
+                },
+                "end": {
+                  "id": [
+                    "NgIaj867hUgQ",
+                    9
+                  ],
+                  "anchor": "after"
+                },
+                "annotation": [
+                  "m",
+                  "00000000-0000-4000-8000-000000000015"
+                ]
+              }
+            },
+            {
+              "pointer": {
+                "table": "discussion",
+                "id": "00000000-0000-4000-8000-000000000015",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "command": "update",
+              "args": {
+                "type": "default",
+                "parent_id": "00000000-0000-4000-8000-000000000014",
+                "parent_table": "block",
+                "resolved": false,
+                "context": [
+                  [
+                    "selected text",
+                    [
+                      [
+                        "m",
+                        "00000000-0000-4000-8000-000000000015"
+                      ]
+                    ]
+                  ]
+                ],
+                "space_id": "00000000-0000-4000-8000-000000000002"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000016",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "command": "set",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000016",
+                "parent_id": "00000000-0000-4000-8000-000000000015",
+                "parent_table": "discussion",
+                "alive": true,
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "created_time": 1794216078775,
+                "last_edited_time": 1794216078775,
+                "version": 1
+              }
+            },
+            {
+              "pointer": {
+                "table": "discussion",
+                "id": "00000000-0000-4000-8000-000000000015",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "comments"
+              ],
+              "command": "listAfter",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000016"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000016",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "text"
+              ],
+              "command": "set",
+              "args": [
+                [
+                  "test 4"
+                ]
+              ]
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000017",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000015",
+                "parent_table": "discussion",
+                "last_seen_at": 1794216078776
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "id": "00000000-0000-4000-8000-000000000017",
+                "table": "user_seen_record",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "user_id": "00000000-0000-4000-8000-000000000001",
+                "space_id": "00000000-0000-4000-8000-000000000002",
+                "parent_id": "00000000-0000-4000-8000-000000000015",
+                "parent_table": "discussion",
+                "subscription_state": "subscribed"
+              },
+              "command": "update"
+            },
+            {
+              "pointer": {
+                "table": "block",
+                "id": "00000000-0000-4000-8000-000000000014",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [
+                "discussions"
+              ],
+              "command": "listAfter",
+              "args": {
+                "id": "00000000-0000-4000-8000-000000000015"
+              }
+            },
+            {
+              "pointer": {
+                "table": "comment",
+                "id": "00000000-0000-4000-8000-000000000016",
+                "spaceId": "00000000-0000-4000-8000-000000000002"
+              },
+              "path": [],
+              "args": {
+                "created_by_id": "00000000-0000-4000-8000-000000000001",
+                "created_by_table": "notion_user"
+              },
+              "command": "update"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

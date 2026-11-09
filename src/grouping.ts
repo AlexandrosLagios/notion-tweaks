@@ -26,6 +26,7 @@ export interface Row {
   ids: string[];
   unreadIds: string[];
   path: string;
+  discussionId: string | null;
   title: string;
   verbs: string[];
   actors: string[];
@@ -198,6 +199,7 @@ function toRow(recordMap: RecordMap, notifications: any[], homeGroup: string, da
     ids: notifications.map((notification) => notification.id),
     unreadIds: notifications.filter((notification) => !notification.read).map((notification) => notification.id),
     path: blockId ? `/p/${compactId(blockId)}${discussionId ? `?d=${compactId(discussionId)}` : ''}` : '/',
+    discussionId,
     title: plainText(recordMap, page?.properties?.title) || UNTITLED,
     verbs: [...new Set(notifications.map((notification) => TYPE_VERBS[notification.type] ?? notification.type))],
     actors: [...new Set(notifications.flatMap((notification) => actorsOf(recordMap, notification)))],

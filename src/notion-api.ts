@@ -32,13 +32,17 @@ class SignedOutError extends Error {
   }
 }
 
-async function post(endpoint: string, body: unknown, options?: RequestInit): Promise<any> {
+async function post(
+  endpoint: string,
+  body: unknown,
+  options?: RequestInit & { headers?: Record<string, string> },
+): Promise<any> {
   const response = await fetch(`${NOTION_ORIGIN}/api/v3/${endpoint}`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
   if (response.status === HTTP_UNAUTHORIZED) {
     throw new SignedOutError();
@@ -162,6 +166,81 @@ export function restoreNotifications(spaceId: string, notificationIds: string[],
 
 export function markNotificationsRead(spaceId: string, notificationIds: string[]) {
   return updateNotifications(spaceId, notificationIds.map((id) => ({ id, args: { read: true } })));
+}
+
+export interface Comment {
+  userId: string;
+  spaceId: string;
+  discussionId: string;
+  text: string;
+}
+
+interface Ids {
+  requestId: string;
+  transactionId: string;
+  commentId: string;
+  now: number;
+}
+
+const newIds = (): Ids => ({
+  requestId: crypto.randomUUID(),
+  transactionId: crypto.randomUUID(),
+  commentId: crypto.randomUUID(),
+  now: Date.now(),
+});
+
+// The same operations as a reply in the Notion web client, without its user_seen_record updates: their ids cannot be derived.
+export function postComment({ userId, spaceId, discussionId, text }: Comment, ids = newIds()) {
+  const { requestId, transactionId, commentId, now } = ids;
+  const comment = { table: 'comment', id: commentId, spaceId };
+  return post(
+    'saveTransactionsFanout',
+    {
+      requestId,
+      transactions: [
+        {
+          id: transactionId,
+          spaceId,
+          operations: [
+            {
+              pointer: comment,
+              path: [],
+              command: 'set',
+              args: {
+                id: commentId,
+                parent_id: discussionId,
+                parent_table: 'discussion',
+                alive: true,
+                space_id: spaceId,
+                created_time: now,
+                last_edited_time: now,
+                version: 1,
+              },
+            },
+            {
+              pointer: { table: 'discussion', id: discussionId, spaceId },
+              path: ['comments'],
+              command: 'listAfter',
+              args: { id: commentId },
+            },
+            { pointer: comment, path: ['text'], command: 'set', args: [[text]] },
+            {
+              pointer: comment,
+              path: [],
+              command: 'update',
+              args: { created_by_id: userId, created_by_table: 'notion_user', last_edited_time: now },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      headers: {
+        'x-notion-space-id': spaceId,
+        ...(userId === ANY_USER ? {} : { 'x-notion-active-user-header': userId }),
+      },
+    },
+  );
 }
 
 // Runs in the main world of the Notion tab, so the function can use no outside values.

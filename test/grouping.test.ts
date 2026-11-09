@@ -145,6 +145,7 @@ test('groupNotifications describes each row for the panel', () => {
     ids: [B7, B1],
     unreadIds: [B1],
     path: '/p/a1000000000040008000000000000001?d=d1a00000000040008000000000000001',
+    discussionId: 'd1a00000-0000-4000-8000-000000000001',
     title: 'Fix login',
     verbs: ['updated', 'mentioned you'],
     actors: ['Status Sync', 'Maria Doe'],
@@ -178,6 +179,11 @@ test('groupNotifications links to the discussion of the activity', () => {
 
 test('groupNotifications links to the page when the row has no discussion', () => {
   assert.equal(groupsFor(RULES_TEXT)[2].items[0].path, '/p/a3000000000040008000000000000003');
+});
+
+test('groupNotifications keeps the discussion id of a row for a reply', () => {
+  assert.equal(groupsFor(RULES_TEXT)[1].items[0].discussionId, 'd4b00000-0000-4000-8000-000000000042');
+  assert.equal(groupsFor(RULES_TEXT)[2].items[0].discussionId, null);
 });
 
 test('groupNotifications names each person once across the children of a grouped notification', () => {

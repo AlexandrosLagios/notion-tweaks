@@ -1,9 +1,11 @@
 import * as NotionTweaksApi from './notion-api.ts';
 import * as NotionTweaksGrouping from './grouping.ts';
 import * as NotionTweaksPanel from './panel.ts';
+import * as NotionTweaksSchedule from './schedule.ts';
 import type { InboxType, Space } from './notion-api.ts';
 import type { Group, Row, Rule } from './grouping.ts';
 import type { Handlers, View } from './panel.ts';
+import type { ScheduledComment } from './schedule.ts';
 
 interface SpacesOfUser {
   userId: string | undefined;
@@ -41,12 +43,13 @@ let currentId: string | undefined;
 let rules: Rule[] = [];
 let movedRows: Record<string, Row> = {};
 let listIsStale = false;
+let scheduled: ScheduledComment[] = [];
 
 const spacesOfUser = () => (spaces.userId === userId ? spaces.list : []);
 
 const render = () =>
   NotionTweaksPanel.render(
-    { ...view, inboxType, unreadCount, currentId, spaces: spacesOfUser(), spaceId },
+    { ...view, inboxType, unreadCount, currentId, spaces: spacesOfUser(), spaceId, scheduled },
     handlers,
   );
 
@@ -297,11 +300,43 @@ const handlers: Handlers = {
     }
     NotionTweaksApi.openPage(item.path).catch(console.error);
   },
+  async onReplyLater(item) {
+    const reply = await NotionTweaksPanel.askReply(item.title);
+    if (!reply || !item.discussionId) {
+      return;
+    }
+    const entry: ScheduledComment = {
+      id: crypto.randomUUID(),
+      userId,
+      spaceId,
+      discussionId: item.discussionId,
+      title: item.title,
+      path: item.path,
+      status: NotionTweaksSchedule.STATUS.PENDING,
+      ...reply,
+    };
+    await NotionTweaksSchedule.saveSchedule(NotionTweaksSchedule.addEntry(await NotionTweaksSchedule.readSchedule(), entry));
+    await chrome.alarms.create(NotionTweaksSchedule.alarmName(entry.id), { when: entry.sendAt });
+  },
+  // The worker is the only sender, so a comment never posts from two places.
+  onSendNow(id) {
+    chrome.runtime.sendMessage({ sendNow: id }).catch(console.error);
+  },
+  async onCancelComment(id) {
+    await chrome.alarms.clear(NotionTweaksSchedule.alarmName(id));
+    await NotionTweaksSchedule.saveSchedule(NotionTweaksSchedule.removeEntry(await NotionTweaksSchedule.readSchedule(), id));
+  },
 };
 
 chrome.storage.session.onChanged.addListener(({ unreadCount: change }) => {
   if (change) {
     showUnreadCount(change.newValue as number | undefined);
+  }
+});
+chrome.storage.local.onChanged.addListener(({ [NotionTweaksSchedule.SCHEDULE_KEY]: change }) => {
+  if (change) {
+    scheduled = (change.newValue as ScheduledComment[] | undefined) ?? [];
+    render();
   }
 });
 document.documentElement.addEventListener('pointerleave', refreshIfStale);
@@ -310,12 +345,14 @@ document.addEventListener('focusout', () => setTimeout(refreshIfStale));
 Promise.all([
   chrome.storage.local.get<{ inboxType?: InboxType; flaggedRows?: Record<string, Row> }>(['inboxType', 'flaggedRows']),
   chrome.storage.sync.get<{ rulesText?: string }>('rulesText'),
+  NotionTweaksSchedule.readSchedule(),
   chrome.storage.session.get<{ lastList?: LastList; spaces?: SpacesOfUser; unreadCount?: number }>([
     'lastList',
     'spaces',
     'unreadCount',
   ]),
-]).then(([stored, synced, session]) => {
+]).then(([stored, synced, storedSchedule, session]) => {
+  scheduled = storedSchedule;
   inboxType = stored.inboxType ?? inboxType;
   movedRows = stored.flaggedRows ?? movedRows;
   rules = NotionTweaksGrouping.parseRules(synced.rulesText ?? '');

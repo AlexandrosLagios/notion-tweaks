@@ -1,7 +1,9 @@
 import * as NotionTweaksApi from './notion-api.ts';
 import * as NotionTweaksGrouping from './grouping.ts';
+import * as NotionTweaksSchedule from './schedule.ts';
 import type { InboxType, Space } from './notion-api.ts';
 import type { Group, Row } from './grouping.ts';
+import type { ScheduledComment } from './schedule.ts';
 
 export interface ReadyView {
   status: 'ready';
@@ -19,6 +21,7 @@ type PanelView = View & {
   currentId?: string;
   spaces: Space[];
   spaceId?: string;
+  scheduled: ScheduledComment[];
 };
 
 export interface Handlers {
@@ -32,6 +35,14 @@ export interface Handlers {
   onMoveDatabase(item: Row, target: string): void;
   onRead(item: Row, groupName: string): void;
   onOpen(item: Row, groupName: string): void;
+  onReplyLater(item: Row): void;
+  onSendNow(id: string): void;
+  onCancelComment(id: string): void;
+}
+
+export interface Reply {
+  text: string;
+  sendAt: number;
 }
 
 type MoveOption = HTMLOptionElement & { isNewGroup?: boolean; onDatabase?: boolean };
@@ -41,13 +52,20 @@ const MIDDLE_BUTTON = 1;
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
+const DEFAULT_SEND_HOUR = 9;
+const SCHEDULE_VALUE = 'schedule';
 const FILTER_OPTIONS: { value: InboxType; label: string }[] = [
   { value: NotionTweaksApi.INBOX_TYPE.ALL, label: 'All' },
   { value: NotionTweaksApi.INBOX_TYPE.UNREAD, label: 'Unread' },
 ];
 const collapsedGroups = new Set<string>();
+let isScheduledCollapsed = false;
 const root = document.getElementById('root')!;
 const newGroupDialog = document.getElementById('new-group') as HTMLDialogElement;
+const replyDialog = document.getElementById('reply-later') as HTMLDialogElement;
+const replyText = replyDialog.querySelector('textarea')!;
+const replySendAt = replyDialog.querySelector('input')!;
+const replyError = replyDialog.querySelector<HTMLElement>('.error')!;
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -123,6 +141,60 @@ function askGroupName() {
       once: true,
     });
   });
+}
+
+// The value of a datetime-local field: the local date and time, without seconds.
+function localInputValue(time: number) {
+  const date = new Date(time);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
+// ponytail: tomorrow at 9:00 as the default; remember the last chosen time if users keep changing it.
+function defaultSendAt() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(DEFAULT_SEND_HOUR, 0, 0, 0);
+  return date.getTime();
+}
+
+const chosenReply = (): Reply => ({ text: replyText.value.trim(), sendAt: new Date(replySendAt.value).getTime() });
+
+replyDialog.querySelector('form')!.addEventListener('submit', (event) => {
+  if (event.submitter?.getAttribute('value') !== SCHEDULE_VALUE) {
+    return;
+  }
+  const { text, sendAt } = chosenReply();
+  const error = text ? NotionTweaksSchedule.sendAtError(sendAt, Date.now()) : 'Write a reply.';
+  if (error) {
+    event.preventDefault();
+    replyError.textContent = error;
+    replyError.hidden = false;
+  }
+});
+
+export function askReply(title: string) {
+  replyDialog.querySelector('.dialog-title')!.textContent = title;
+  replyText.value = '';
+  replySendAt.value = localInputValue(defaultSendAt());
+  replyError.hidden = true;
+  replyDialog.returnValue = '';
+  replyDialog.showModal();
+  return new Promise<Reply | undefined>((resolve) => {
+    replyDialog.addEventListener('close', () => resolve(replyDialog.returnValue ? chosenReply() : undefined), {
+      once: true,
+    });
+  });
+}
+
+function replyAction(item: Row, { onReplyLater }: Handlers) {
+  const button = el('button', { textContent: 'Reply later' });
+  button.addEventListener('click', (event) => {
+    if (!isRepeatClick(event)) {
+      onReplyLater(item);
+    }
+  });
+  return button;
 }
 
 const moveOptions = (targets: string[], onDatabase: boolean) => [
@@ -222,9 +294,10 @@ function rowClass(item: Row, currentId: string | undefined) {
 
 function row(item: Row, groupName: string, view: PanelView & ReadyView, handlers: Handlers) {
   const preview = item.preview ? [el('p', { className: 'preview', textContent: item.preview })] : [];
+  const canReply = Boolean(item.discussionId && !item.archived);
   return el(
     'li',
-    { className: rowClass(item, view.currentId) },
+    { className: `${rowClass(item, view.currentId)} ${canReply ? 'can-reply' : ''}`.trim() },
     el(
       'div',
       { className: 'row' },
@@ -237,6 +310,7 @@ function row(item: Row, groupName: string, view: PanelView & ReadyView, handlers
         ...(item.archived
           ? []
           : [flagAction(item, groupName, handlers), moveAction(item, groupName, view.groups, handlers)]),
+        ...(canReply ? [replyAction(item, handlers)] : []),
       ),
     ),
     el('small', { textContent: sentence(item) }),
@@ -275,6 +349,52 @@ function groupSection(group: Group, view: PanelView & ReadyView, handlers: Handl
   }
   details.append(el('ul', {}, ...group.items.map((item) => row(item, group.name, view, handlers))));
   return details;
+}
+
+const sendTime = (sendAt: number) =>
+  new Date(sendAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function scheduledStatus({ status, sendAt, error }: ScheduledComment) {
+  if (status === NotionTweaksSchedule.STATUS.OVERDUE) {
+    return `Not sent at ${sendTime(sendAt)}, because Chrome was closed`;
+  }
+  return status === NotionTweaksSchedule.STATUS.FAILED ? `Not sent: ${error}` : `Sends ${sendTime(sendAt)}`;
+}
+
+function scheduledRow(entry: ScheduledComment, { onSendNow, onCancelComment }: Handlers) {
+  const link = el('a', { href: NotionTweaksApi.pageUrl(entry.path), target: '_blank', textContent: entry.title });
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    NotionTweaksApi.openPage(entry.path).catch(console.error);
+  });
+  const cancel = el('button', { textContent: 'Cancel' });
+  cancel.addEventListener('click', () => onCancelComment(entry.id));
+  const sendNow = el('button', { textContent: 'Send now' });
+  sendNow.addEventListener('click', () => onSendNow(entry.id));
+  const actions = entry.status === NotionTweaksSchedule.STATUS.PENDING ? [cancel] : [sendNow, cancel];
+  return el(
+    'li',
+    { className: entry.status },
+    el('div', { className: 'row' }, link, el('div', { className: 'row-actions' }, ...actions)),
+    el('small', { textContent: scheduledStatus(entry) }),
+    el('p', { className: 'preview', textContent: entry.text }),
+  );
+}
+
+function scheduledSection(scheduled: ScheduledComment[], handlers: Handlers) {
+  if (!scheduled.length) {
+    return [];
+  }
+  const details = el(
+    'details',
+    { open: !isScheduledCollapsed, className: 'scheduled' },
+    el('summary', {}, el('span', { textContent: 'Scheduled' }), el('span', { className: 'count', textContent: String(scheduled.length) })),
+    el('ul', {}, ...scheduled.map((entry) => scheduledRow(entry, handlers))),
+  );
+  details.addEventListener('toggle', () => {
+    isScheduledCollapsed = !details.open;
+  });
+  return [details];
 }
 
 function body(view: PanelView, handlers: Handlers) {
@@ -346,6 +466,7 @@ export function render(view: PanelView, handlers: Handlers) {
       choiceSelect({ ariaLabel: 'Status' }, FILTER_OPTIONS, view.inboxType, handlers.onFilter),
       reload,
     ),
+    ...scheduledSection(view.scheduled, handlers),
     ...body(view, handlers),
   );
   root.replaceChildren(panel);
@@ -371,4 +492,5 @@ export function showSpaces(spaces: Space[], spaceId: string | undefined, onSpace
 export const isBusy = () =>
   root.matches(':hover') ||
   newGroupDialog.open ||
+  replyDialog.open ||
   (document.hasFocus() && document.activeElement instanceof HTMLSelectElement);
