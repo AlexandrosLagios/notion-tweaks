@@ -5,7 +5,7 @@ description: Use when releasing a new version of this extension to the Chrome We
 
 # release
 
-Prepare a new version of Inbox Tweaks for Notion, and hand the upload to the user.
+Prepare a new version of Enhanced Notion, and hand the upload to the user.
 
 A request for a release authorizes the commit, the tag, and the push to `main`. Never submit to the store for the user. Chrome blocks browser tools on the Web Store, and the submission is theirs.
 
@@ -61,7 +61,7 @@ The version must be higher than the last tag, or the dashboard rejects the ZIP. 
 2. Run the command below. Replace `X.Y.Z` with the new version.
 
 ```sh
-cd "$root" && [ "$(git branch --show-current)" = main ] && node --test 2>&1 | grep -E '^ℹ fail 0$' && npm run --silent check && "$root/scripts/package.sh" && python3 -c "import json,zipfile; assert json.loads(zipfile.ZipFile('$root/dist/inbox-tweaks-for-notion-X.Y.Z.zip').read('manifest.json'))['version'] == 'X.Y.Z'" && git add manifest.json && git commit -m "chore: release X.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
+cd "$root" && [ "$(git branch --show-current)" = main ] && node --test 2>&1 | grep -E '^ℹ fail 0$' && npm run --silent check && "$root/scripts/package.sh" && python3 -c "import json,zipfile; assert json.loads(zipfile.ZipFile('$root/dist/enhanced-notion-X.Y.Z.zip').read('manifest.json'))['version'] == 'X.Y.Z'" && git add manifest.json && git commit -m "chore: release X.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
 ```
 
 Commit changes from step 2 in earlier commits, so that this commit holds only the version.
@@ -70,7 +70,7 @@ Commit changes from step 2 in earlier commits, so that this commit holds only th
 
 ```sh
 open "https://chrome.google.com/webstore/devconsole/681f0b71-fedf-41b2-ac38-00175a64170e"
-open -R "$root/dist/inbox-tweaks-for-notion-X.Y.Z.zip"
+open -R "$root/dist/enhanced-notion-X.Y.Z.zip"
 ```
 
 Give the user these steps:

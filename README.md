@@ -1,8 +1,8 @@
 # notion-tweaks
 
-The source of Inbox Tweaks for Notion, a Chrome extension that gives the Notion inbox groups, an "Action needed" section, and undo. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
+The source of Enhanced Notion, a Chrome extension that gives the Notion inbox groups, an "Action needed" section, and undo, and that sends Notion comments at a time that you choose. The extension is not affiliated with Notion Labs, Inc. See the [privacy policy](https://gist.github.com/AlexandrosLagios/f7af4c566213874c72fd5a5e0089923c). When you change `PRIVACY.md`, update the gist as well.
 
-The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. By default, each group collects the notifications of one database, and you can create your own groups in the panel. The panel uses internal Notion endpoints, so a Notion release can break the panel.
+The extension adds a Chrome side panel for the Notion web app at `https://app.notion.com`. The panel shows the inbox notifications in groups. By default, each group collects the notifications of one database, and you can create your own groups in the panel. A content script adds a clock button to each Notion comment box. The extension uses internal Notion endpoints and props, so a Notion release can break the extension.
 
 ## Install
 
@@ -11,7 +11,7 @@ The extension adds a Chrome side panel for the Notion web app at `https://app.no
 3. Turn on "Developer mode".
 4. Select "Load unpacked", and select this directory.
 
-After a change, run `npm run build` again. After a change to `manifest.json`, `src/background.ts`, or `src/notion-api.ts`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
+After a change, run `npm run build` again. After a change to `manifest.json`, `src/background.ts`, or `src/notion-api.ts`, select the reload icon of the extension on `chrome://extensions`. After a change to `src/content.ts`, `src/content-main.ts`, or `src/picker.ts`, reload the extension, and then reload each Notion tab. A Notion tab keeps the earlier content script until the tab reloads. After a change to another file, close the side panel and open the side panel again.
 
 ## Groups
 
@@ -60,6 +60,30 @@ The toolbar icon and the badge next to the title show the number of unread notif
 
 The panel shows the last list at once when it opens, with "Updating…" in the header, and then loads the current list. When the unread count goes up, the panel loads the list again. The panel waits until the pointer leaves the panel, so the list does not change under the pointer. Like "Reload", this load removes the archived rows.
 
+## Schedule a comment
+
+A scheduled comment posts as you, with your Notion session, at the time that you choose. The comment takes plain text only, without mentions, links, or formatting.
+
+To reply later from the panel:
+
+1. Point to a row with a comment, and select "Reply later".
+2. Type the reply.
+3. Select a preset time, or select a date and a time, and then select "Schedule".
+
+To send a comment later from a Notion page:
+
+1. Type the comment in a Notion comment box. The box can be a reply in a thread, a page comment, or a comment on selected text.
+2. Select the clock button next to the send button.
+3. Select a preset time, or select a date and a time, and then select "Schedule".
+
+The extension clears the comment box. The "Scheduled" section at the top of the panel lists each comment that is not sent yet. To remove a comment, select "Cancel". The send time must be at least 1 minute ahead.
+
+A comment posts only while Chrome is open. When Chrome is closed or the computer sleeps at the send time, and the time is more than 5 minutes ago, the comment does not post. The row shows "Not sent", with "Send now" and "Cancel". When Notion refuses a comment, the row shows the reason from Notion, and "Send now" tries again.
+
+A reply from the panel can fail in a thread that you do not follow, because only the Notion page knows your follow state. Cancel that reply, and schedule the reply from the page with the clock button.
+
+A comment on selected text posts without the highlight in the page text.
+
 ## Publish
 
 1. Update `version` in `manifest.json`.
@@ -76,7 +100,7 @@ npm test
 npm run check
 ```
 
-The unit tests cover `src/grouping.ts` and `manifest.json`. Do the manual check below after a change to `src/notion-api.ts`, `src/panel.ts`, or `src/sidepanel.ts`:
+The unit tests cover `src/grouping.ts`, `src/schedule.ts`, the comment requests of `src/notion-api.ts`, and `manifest.json`. Do the manual check below after a change to `src/notion-api.ts`, `src/panel.ts`, or `src/sidepanel.ts`:
 
 1. Run `npm run build`, load this directory as an unpacked extension, and open the panel.
 2. Select a row. Make sure that the Notion tab opens the page without a reload.
@@ -89,3 +113,9 @@ Do these checks too after a change to `src/background.ts` or `src/sidepanel.ts`:
 1. Close the panel, and wait one minute. Make sure that the toolbar icon shows the unread count.
 2. Open the panel. Make sure that the last list shows at once, with "Updating…" in the header.
 3. Select "Move" on a row in a database, and select a group under "All of <database>". Make sure that all the rows of the database move.
+
+Do these checks too after a change to `src/content.ts`, `src/content-main.ts`, `src/picker.ts`, `src/schedule.ts`, or the comment requests in `src/notion-api.ts`:
+
+1. Reload the Notion tab. Make sure that each comment box shows the clock button next to the send button.
+2. Type a reply in a thread, select the clock button, and schedule the reply 2 minutes ahead. Make sure that the reply posts at that time.
+3. Select "Reply later" on a row in the panel, and schedule a reply 2 minutes ahead. Make sure that the reply posts at that time.

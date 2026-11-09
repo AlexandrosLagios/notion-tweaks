@@ -31,8 +31,12 @@ test('the manifest points at icons that exist', () => {
   icons.forEach((icon) => assert.equal(existsSync(path.join(import.meta.dirname, '..', icon)), true, icon));
 });
 
-test('the manifest name does not start with the Notion trademark', () => {
-  assert.equal(manifest.name.startsWith('Notion'), false);
+test('the manifest name is Enhanced Notion, which does not start with the Notion trademark', () => {
+  assert.equal(manifest.name, 'Enhanced Notion');
+});
+
+test('the manifest description fits the 132 characters of the Chrome Web Store summary', () => {
+  assert.equal(manifest.description.length <= 132, true, `${manifest.description.length} characters`);
 });
 
 test('the manifest asks only for permissions without an install warning, so an update keeps the extension turned on', () => {

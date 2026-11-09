@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 version=$(node -p "require('./manifest.json').version")
-archive="dist/inbox-tweaks-for-notion-$version.zip"
+archive="dist/enhanced-notion-$version.zip"
 npm run --silent build
 mkdir -p dist
 rm -f "$archive"
