@@ -52,7 +52,7 @@ The version must be higher than the last tag, or the dashboard rejects the ZIP. 
 ## 4. Test
 
 1. Run `npm test` and `npm run check` in `$root`. Stop on any failure.
-2. Run `npm run build` in `$root`. Ask the user to reload the unpacked extension from `build/` and do the manual check in `README.md`. Browser tools cannot open extension pages, so an agent cannot do this check.
+2. Run `npm run build` in `$root`. Ask the user to reload the unpacked extension and do the manual check in `README.md`. Browser tools cannot open extension pages, so an agent cannot do this check.
 3. Wait for the answer, unless the user already confirmed the check for this code.
 
 ## 5. Build and push

@@ -6,10 +6,10 @@ The extension adds a Chrome side panel for the Notion web app at `https://app.no
 
 ## Install
 
-1. Run `npm run build`. The script writes the extension to `build/`.
+1. Run `npm run build`. The script writes `src/*.js` next to `src/*.ts`.
 2. Open `chrome://extensions` in Chrome.
 3. Turn on "Developer mode".
-4. Select "Load unpacked", and select the `build/` directory.
+4. Select "Load unpacked", and select this directory.
 
 After a change, run `npm run build` again. After a change to `manifest.json`, `src/background.ts`, or `src/notion-api.ts`, select the reload icon of the extension on `chrome://extensions`. After a change to another file, close the side panel and open the side panel again.
 
@@ -78,7 +78,7 @@ npm run check
 
 The unit tests cover `src/grouping.ts` and `manifest.json`. Do the manual check below after a change to `src/notion-api.ts`, `src/panel.ts`, or `src/sidepanel.ts`:
 
-1. Run `npm run build`, load `build/` as an unpacked extension, and open the panel.
+1. Run `npm run build`, load this directory as an unpacked extension, and open the panel.
 2. Select a row. Make sure that the Notion tab opens the page without a reload.
 3. Archive a row. Find the notification in the "Archived" filter of the native Notion inbox.
 4. Select "Undo". Make sure that the notification returns to the native Notion inbox.

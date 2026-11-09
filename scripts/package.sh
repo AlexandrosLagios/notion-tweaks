@@ -6,5 +6,5 @@ archive="dist/inbox-tweaks-for-notion-$version.zip"
 npm run --silent build
 mkdir -p dist
 rm -f "$archive"
-(cd build && zip -qr "../$archive" .)
+zip -qr "$archive" manifest.json sidepanel.html src/*.js icons
 echo "$archive"
