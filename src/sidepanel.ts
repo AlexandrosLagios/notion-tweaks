@@ -315,8 +315,7 @@ const handlers: Handlers = {
       status: NotionTweaksSchedule.STATUS.PENDING,
       ...reply,
     };
-    await NotionTweaksSchedule.saveSchedule(NotionTweaksSchedule.addEntry(await NotionTweaksSchedule.readSchedule(), entry));
-    await chrome.alarms.create(NotionTweaksSchedule.alarmName(entry.id), { when: entry.sendAt });
+    await chrome.runtime.sendMessage({ schedule: entry });
   },
   // The worker is the only sender, so a comment never posts from two places.
   onSendNow(id) {

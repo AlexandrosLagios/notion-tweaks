@@ -53,6 +53,7 @@
       dialog textarea { box-sizing: border-box; width: 100%; margin-bottom: 8px; padding: 4px 8px; font: inherit; color: inherit; background: transparent; border-radius: 4px; border: 1px solid light-dark(#37352f33, #ffffff33); resize: vertical; }
       .dialog-title { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
       li.can-reply { min-height: 80px; }
+      #reply-later { width: min(320px, calc(100vw - 32px)); }
       .scheduled > summary > span:first-child { color: #d9730d; }
       li.overdue::before, li.failed::before { content: ''; position: absolute; left: 5px; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: #d9730d; }
     </style>
@@ -74,8 +75,7 @@
         <p class="dialog-title"></p>
         <label for="reply-text">Reply</label>
         <textarea id="reply-text" rows="4" required></textarea>
-        <label for="reply-send-at">Send at</label>
-        <input id="reply-send-at" type="datetime-local" required />
+        <div class="picker-slot"></div>
         <p class="error" hidden></p>
         <div class="dialog-actions">
           <button value="schedule">Schedule</button>

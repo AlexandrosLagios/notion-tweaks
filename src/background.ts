@@ -5,6 +5,7 @@ import type { ScheduledComment } from './schedule.ts';
 const UNREAD_ALARM = 'unread-count';
 const BADGE_COLOR = '#2383e2';
 const DECISION_BADGE_COLOR = '#d9730d';
+const NOT_FOLLOWED_HINT = 'If you do not follow this thread, cancel this reply and schedule it from the page with the clock button.';
 const { SCHEDULE_KEY, STATUS, readSchedule, saveSchedule } = NotionTweaksSchedule;
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
@@ -20,12 +21,25 @@ const showDecisionBadge = (list: ScheduledComment[]) =>
     color: NotionTweaksSchedule.needsDecision(list) ? DECISION_BADGE_COLOR : BADGE_COLOR,
   });
 
-let sends = Promise.resolve();
+let listWrites: Promise<unknown> = Promise.resolve();
 
-// One send at a time, so an alarm and a "Send now" click cannot both read the entry and post it twice.
-// ponytail: the panel also writes the list; route its writes through the worker if an edit ever gets lost.
-function enqueueSend(id: string, onlyIfOnTime: boolean) {
-  sends = sends.then(() => send(id, onlyIfOnTime)).catch(console.error);
+// One list write at a time, so an alarm, a "Send now" click, and a new entry cannot overwrite each other or post twice.
+// ponytail: Cancel in the panel still writes the list itself; route it through the worker if a cancel ever gets lost.
+function serialize<T>(task: () => Promise<T>) {
+  const result = listWrites.then(task);
+  listWrites = result.catch(console.error);
+  return result;
+}
+
+const enqueueSend = (id: string, onlyIfOnTime: boolean) => serialize(() => send(id, onlyIfOnTime)).catch(console.error);
+
+async function schedule(entry: ScheduledComment) {
+  const error = NotionTweaksSchedule.sendAtError(entry.sendAt, Date.now());
+  if (!error) {
+    await saveSchedule(NotionTweaksSchedule.addEntry(await readSchedule(), entry));
+    await chrome.alarms.create(NotionTweaksSchedule.alarmName(entry.id), { when: entry.sendAt });
+  }
+  return { error };
 }
 
 async function send(id: string, onlyIfOnTime: boolean) {
@@ -42,7 +56,9 @@ async function send(id: string, onlyIfOnTime: boolean) {
   try {
     await NotionTweaksApi.postComment(entry);
   } catch (error) {
-    const failed = { ...entry, status: STATUS.FAILED, error: (error as Error).message };
+    // The panel cannot read the seen record id, so its reply fails in a thread that the user does not follow.
+    const hint = 'discussionId' in entry && !entry.seenRecordId ? ` ${NOT_FOLLOWED_HINT}` : '';
+    const failed = { ...entry, status: STATUS.FAILED, error: (error as Error).message + hint };
     await saveSchedule(NotionTweaksSchedule.addEntry(await readSchedule(), failed));
   }
 }
@@ -82,10 +98,17 @@ chrome.alarms.onAlarm.addListener(async ({ name }) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message: { sendNow?: string }) => {
+// The panel and the comment box button add entries here, so the worker is the only writer of a new entry.
+chrome.runtime.onMessage.addListener((message: { sendNow?: string; schedule?: ScheduledComment }, _sender, sendResponse) => {
   if (message.sendNow) {
     enqueueSend(message.sendNow, false);
   }
+  if (message.schedule) {
+    const entry = message.schedule;
+    serialize(() => schedule(entry)).then(sendResponse, (error: Error) => sendResponse({ error: error.message }));
+    return true;
+  }
+  return undefined;
 });
 
 chrome.storage.local.onChanged.addListener(({ [SCHEDULE_KEY]: change }) => {

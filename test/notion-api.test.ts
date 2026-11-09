@@ -32,7 +32,10 @@ const replyComment = replyTransaction.operations[0] as {
 const CREATED_TIME = replyComment.args.created_time;
 const USER_ID = reply.headers['x-notion-active-user-header'];
 
-async function capturePost(userId: string) {
+type Comment = Parameters<typeof postComment>[0];
+type Ids = Parameters<typeof postComment>[1];
+
+async function capturePost(comment: Comment, ids: Ids) {
   const calls: { url: string; init: RequestInit }[] = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
@@ -40,18 +43,28 @@ async function capturePost(userId: string) {
     return new Response('{}');
   };
   try {
-    await postComment(
-      { userId, spaceId: replyTransaction.spaceId, discussionId: replyComment.args.parent_id, text: 'test 2' },
-      { requestId: reply.body.requestId, transactionId: replyTransaction.id, commentId: replyComment.pointer.id, now: CREATED_TIME },
-    );
+    await postComment(comment, ids);
   } finally {
     globalThis.fetch = realFetch;
   }
   return calls;
 }
 
+const postReply = (userId: string) =>
+  capturePost(
+    { userId, spaceId: replyTransaction.spaceId, discussionId: replyComment.args.parent_id, text: 'test 2' },
+    {
+      requestId: reply.body.requestId,
+      transactionId: replyTransaction.id,
+      discussionId: 'unused',
+      seenRecordId: 'unused',
+      commentId: replyComment.pointer.id,
+      now: CREATED_TIME,
+    },
+  );
+
 test('postComment sends the reply operations of the Notion web client, without the seen-record updates', async () => {
-  const [{ url, init }] = await capturePost(USER_ID);
+  const [{ url, init }] = await postReply(USER_ID);
   const operations = structuredClone(replyTransaction.operations).filter(
     (operation) => operation.pointer.table !== 'user_seen_record',
   );
@@ -64,14 +77,92 @@ test('postComment sends the reply operations of the Notion web client, without t
   });
 });
 
+type Operation = { command: string; pointer: { table: string; id: string }; args: Record<string, unknown> };
+
+const SEEN_TABLE = 'user_seen_record';
+// The web client stamps the last visit a few ms after the creation, and the reply repeats the last-visit update.
+const withCreationTimes = (operations: Operation[], createdTime: number) =>
+  operations
+    .filter((operation, index) => !(operation.pointer.table === SEEN_TABLE && operations.findIndex((other) => JSON.stringify(other) === JSON.stringify(operation)) !== index))
+    .map((operation) =>
+      operation.pointer.table === SEEN_TABLE && 'last_seen_at' in operation.args
+        ? { ...operation, args: { ...operation.args, last_seen_at: createdTime } }
+        : operation.command === 'update' && operation.pointer.table === 'comment' && 'last_edited_time' in operation.args
+          ? { ...operation, args: { ...operation.args, last_edited_time: createdTime } }
+          : operation,
+    );
+
+test('postComment follows the thread with the seen record of the user, as the Notion web client does', async () => {
+  const operations = replyTransaction.operations as Operation[];
+  const seenRecordId = operations.find(({ pointer }) => pointer.table === SEEN_TABLE)!.pointer.id;
+  const [{ init }] = await capturePost(
+    { userId: USER_ID, spaceId: replyTransaction.spaceId, discussionId: replyComment.args.parent_id, seenRecordId, text: 'test 2' },
+    {
+      requestId: reply.body.requestId,
+      transactionId: replyTransaction.id,
+      discussionId: 'unused',
+      seenRecordId: 'unused',
+      commentId: replyComment.pointer.id,
+      now: CREATED_TIME,
+    },
+  );
+  assert.deepEqual(JSON.parse(init.body as string).transactions[0].operations, withCreationTimes(operations, CREATED_TIME));
+});
+
 test('postComment picks the account and the workspace with the headers of the Notion web client', async () => {
-  const [{ init }] = await capturePost(USER_ID);
+  const [{ init }] = await postReply(USER_ID);
   const headers = init.headers as Record<string, string>;
   assert.equal(headers['x-notion-active-user-header'], USER_ID);
   assert.equal(headers['x-notion-space-id'], reply.headers['x-notion-space-id']);
 });
 
 test('postComment sends no account header when the account is unknown', async () => {
-  const [{ init }] = await capturePost('any-user');
+  const [{ init }] = await postReply('any-user');
   assert.equal('x-notion-active-user-header' in (init.headers as Record<string, string>), false);
+});
+
+interface Capture {
+  body: { requestId: string; transactions: { id: string; spaceId: string; operations: unknown[] }[] };
+}
+
+async function postNewDiscussion(capture: Capture, text: string, quote?: string) {
+  const [transaction] = capture.body.transactions;
+  const operations = transaction.operations as Operation[];
+  const discussion = operations.find(({ command, pointer }) => command === 'update' && pointer.table === 'discussion')!;
+  const comment = operations.find(({ command, pointer }) => command === 'set' && pointer.table === 'comment')!;
+  const [{ init }] = await capturePost(
+    { userId: USER_ID, spaceId: transaction.spaceId, blockId: discussion.args.parent_id as string, text, ...(quote && { quote }) },
+    {
+      requestId: capture.body.requestId,
+      transactionId: transaction.id,
+      discussionId: discussion.pointer.id,
+      seenRecordId: operations.find(({ pointer }) => pointer.table === SEEN_TABLE)!.pointer.id,
+      commentId: comment.pointer.id,
+      now: comment.args.created_time as number,
+    },
+  );
+  const expected = withCreationTimes(
+    operations.filter(({ command }) => command !== 'addAnnotation'),
+    comment.args.created_time as number,
+  );
+  assert.deepEqual(JSON.parse(init.body as string), {
+    requestId: capture.body.requestId,
+    transactions: [{ id: transaction.id, spaceId: transaction.spaceId, operations: expected }],
+  });
+}
+
+test('postComment sends the page comment operations of the Notion web client', () =>
+  postNewDiscussion(captures['page-comment'], 'test 1'));
+
+test('postComment quotes the selected text of a new comment, without the text highlight', () =>
+  postNewDiscussion(captures['selected-text-comment'], 'test 4', 'selected text'));
+
+test('a refused request carries the reason that Notion gives', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ name: 'ValidationError', message: 'Invalid input.' }), { status: 400 });
+  try {
+    await assert.rejects(postComment({ userId: USER_ID, spaceId: 's1', discussionId: 'd1', text: 'x' }), /HTTP 400: Invalid input\./);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

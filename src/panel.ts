@@ -1,6 +1,7 @@
 import * as NotionTweaksApi from './notion-api.ts';
 import * as NotionTweaksGrouping from './grouping.ts';
 import * as NotionTweaksSchedule from './schedule.ts';
+import * as NotionTweaksPicker from './picker.ts';
 import type { InboxType, Space } from './notion-api.ts';
 import type { Group, Row } from './grouping.ts';
 import type { ScheduledComment } from './schedule.ts';
@@ -52,7 +53,6 @@ const MIDDLE_BUTTON = 1;
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-const DEFAULT_SEND_HOUR = 9;
 const SCHEDULE_VALUE = 'schedule';
 const FILTER_OPTIONS: { value: InboxType; label: string }[] = [
   { value: NotionTweaksApi.INBOX_TYPE.ALL, label: 'All' },
@@ -64,18 +64,9 @@ const root = document.getElementById('root')!;
 const newGroupDialog = document.getElementById('new-group') as HTMLDialogElement;
 const replyDialog = document.getElementById('reply-later') as HTMLDialogElement;
 const replyText = replyDialog.querySelector('textarea')!;
-const replySendAt = replyDialog.querySelector('input')!;
 const replyError = replyDialog.querySelector<HTMLElement>('.error')!;
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> & Record<string, unknown> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const element = Object.assign(document.createElement(tag), props);
-  element.append(...children);
-  return element;
-}
+const { el } = NotionTweaksPicker;
 
 function age(endTime: number) {
   const elapsed = Date.now() - endTime;
@@ -143,47 +134,43 @@ function askGroupName() {
   });
 }
 
-// The value of a datetime-local field: the local date and time, without seconds.
-function localInputValue(time: number) {
-  const date = new Date(time);
-  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
-  return date.toISOString().slice(0, 16);
-}
+const replyPicker = NotionTweaksPicker.createPicker(scheduleReply);
+replyDialog.querySelector('.picker-slot')!.replaceWith(replyPicker.element);
+document.head.append(el('style', { textContent: NotionTweaksPicker.PICKER_STYLE }));
+let replySendAt = 0;
 
-// ponytail: tomorrow at 9:00 as the default; remember the last chosen time if users keep changing it.
-function defaultSendAt() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  date.setHours(DEFAULT_SEND_HOUR, 0, 0, 0);
-  return date.getTime();
+// A preset click and the Schedule button both end here, so both check the reply and the time.
+function scheduleReply(sendAt: number) {
+  const error = replyText.value.trim() ? NotionTweaksSchedule.sendAtError(sendAt, Date.now()) : 'Write a reply.';
+  replyError.textContent = error ?? '';
+  replyError.hidden = !error;
+  if (!error) {
+    replySendAt = sendAt;
+    replyDialog.close(SCHEDULE_VALUE);
+  }
 }
-
-const chosenReply = (): Reply => ({ text: replyText.value.trim(), sendAt: new Date(replySendAt.value).getTime() });
 
 replyDialog.querySelector('form')!.addEventListener('submit', (event) => {
-  if (event.submitter?.getAttribute('value') !== SCHEDULE_VALUE) {
-    return;
-  }
-  const { text, sendAt } = chosenReply();
-  const error = text ? NotionTweaksSchedule.sendAtError(sendAt, Date.now()) : 'Write a reply.';
-  if (error) {
+  if (event.submitter?.getAttribute('value') === SCHEDULE_VALUE) {
     event.preventDefault();
-    replyError.textContent = error;
-    replyError.hidden = false;
+    scheduleReply(replyPicker.chosen());
   }
 });
 
 export function askReply(title: string) {
   replyDialog.querySelector('.dialog-title')!.textContent = title;
   replyText.value = '';
-  replySendAt.value = localInputValue(defaultSendAt());
+  replyPicker.reset(Date.now());
   replyError.hidden = true;
   replyDialog.returnValue = '';
   replyDialog.showModal();
   return new Promise<Reply | undefined>((resolve) => {
-    replyDialog.addEventListener('close', () => resolve(replyDialog.returnValue ? chosenReply() : undefined), {
-      once: true,
-    });
+    replyDialog.addEventListener(
+      'close',
+      () =>
+        resolve(replyDialog.returnValue === SCHEDULE_VALUE ? { text: replyText.value.trim(), sendAt: replySendAt } : undefined),
+      { once: true },
+    );
   });
 }
 

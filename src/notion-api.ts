@@ -48,7 +48,8 @@ async function post(
     throw new SignedOutError();
   }
   if (!response.ok) {
-    throw new NotionApiError(endpoint, `HTTP ${response.status}`);
+    const { message } = await response.json().catch(() => ({}));
+    throw new NotionApiError(endpoint, message ? `HTTP ${response.status}: ${message}` : `HTTP ${response.status}`);
   }
   return response.json();
 }
@@ -168,16 +169,25 @@ export function markNotificationsRead(spaceId: string, notificationIds: string[]
   return updateNotifications(spaceId, notificationIds.map((id) => ({ id, args: { read: true } })));
 }
 
-export interface Comment {
-  userId: string;
-  spaceId: string;
-  discussionId: string;
-  text: string;
+// A reply goes into a discussion. A new comment starts a discussion on a block, and quotes the selected text, if any.
+// The seen record of the user in a discussion also holds the follow state. Its id is random, so only a Notion page knows it.
+export type Comment = { userId: string; spaceId: string; text: string } & (
+  | { discussionId: string; seenRecordId?: string }
+  | { blockId: string; quote?: string }
+);
+
+interface Operation {
+  pointer: { table: string; id: string; spaceId: string };
+  path: string[];
+  command: string;
+  args: unknown;
 }
 
 interface Ids {
   requestId: string;
   transactionId: string;
+  discussionId: string;
+  seenRecordId: string;
   commentId: string;
   now: number;
 }
@@ -185,55 +195,75 @@ interface Ids {
 const newIds = (): Ids => ({
   requestId: crypto.randomUUID(),
   transactionId: crypto.randomUUID(),
+  discussionId: crypto.randomUUID(),
+  seenRecordId: crypto.randomUUID(),
   commentId: crypto.randomUUID(),
   now: Date.now(),
 });
 
-// The same operations as a reply in the Notion web client, without its user_seen_record updates: their ids cannot be derived.
-export function postComment({ userId, spaceId, discussionId, text }: Comment, ids = newIds()) {
+// The same operations as the Notion web client. A reply without the seen record id leaves out the follow update,
+// and Notion refuses such a reply in a thread that the user does not follow.
+// ponytail: a quoted comment has no highlight in the block text, because Notion writes the highlight as a CRDT operation.
+export function postComment(target: Comment, ids = newIds()) {
+  const { userId, spaceId, text } = target;
   const { requestId, transactionId, commentId, now } = ids;
+  const isReply = 'discussionId' in target;
+  const discussionId = isReply ? target.discussionId : ids.discussionId;
+  const discussion = { table: 'discussion', id: discussionId, spaceId };
   const comment = { table: 'comment', id: commentId, spaceId };
+  const createdBy = { created_by_id: userId, created_by_table: 'notion_user' };
+  const seenRecordId = isReply ? target.seenRecordId : ids.seenRecordId;
+  const seen = { table: 'user_seen_record', id: seenRecordId!, spaceId };
+  const seenRecord = { user_id: userId, space_id: spaceId, parent_id: discussionId, parent_table: 'discussion' };
+  const operations: Operation[] = [
+    {
+      pointer: comment,
+      path: [],
+      command: 'set',
+      args: {
+        id: commentId,
+        parent_id: discussionId,
+        parent_table: 'discussion',
+        alive: true,
+        space_id: spaceId,
+        created_time: now,
+        last_edited_time: now,
+        version: 1,
+      },
+    },
+    { pointer: discussion, path: ['comments'], command: 'listAfter', args: { id: commentId } },
+    { pointer: comment, path: ['text'], command: 'set', args: [[text]] },
+    ...(seenRecordId
+      ? [
+          { pointer: seen, path: [], command: 'update', args: { ...seenRecord, last_seen_at: now } },
+          { pointer: seen, path: [], command: 'update', args: { ...seenRecord, subscription_state: 'subscribed' } },
+        ]
+      : []),
+  ];
+  if (isReply) {
+    operations.push({ pointer: comment, path: [], command: 'update', args: { ...createdBy, last_edited_time: now } });
+  } else {
+    operations.unshift({
+      pointer: discussion,
+      path: [],
+      command: 'update',
+      args: {
+        type: 'default',
+        parent_id: target.blockId,
+        parent_table: 'block',
+        resolved: false,
+        ...(target.quote && { context: [[target.quote, [['m', discussionId]]]] }),
+        space_id: spaceId,
+      },
+    });
+    operations.push(
+      { pointer: { table: 'block', id: target.blockId, spaceId }, path: ['discussions'], command: 'listAfter', args: { id: discussionId } },
+      { pointer: comment, path: [], command: 'update', args: createdBy },
+    );
+  }
   return post(
     'saveTransactionsFanout',
-    {
-      requestId,
-      transactions: [
-        {
-          id: transactionId,
-          spaceId,
-          operations: [
-            {
-              pointer: comment,
-              path: [],
-              command: 'set',
-              args: {
-                id: commentId,
-                parent_id: discussionId,
-                parent_table: 'discussion',
-                alive: true,
-                space_id: spaceId,
-                created_time: now,
-                last_edited_time: now,
-                version: 1,
-              },
-            },
-            {
-              pointer: { table: 'discussion', id: discussionId, spaceId },
-              path: ['comments'],
-              command: 'listAfter',
-              args: { id: commentId },
-            },
-            { pointer: comment, path: ['text'], command: 'set', args: [[text]] },
-            {
-              pointer: comment,
-              path: [],
-              command: 'update',
-              args: { created_by_id: userId, created_by_table: 'notion_user', last_edited_time: now },
-            },
-          ],
-        },
-      ],
-    },
+    { requestId, transactions: [{ id: transactionId, spaceId, operations }] },
     {
       headers: {
         'x-notion-space-id': spaceId,
