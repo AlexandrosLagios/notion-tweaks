@@ -68,17 +68,15 @@ Commit changes from step 2 in earlier commits, so that this commit holds only th
 
 ## 6. Hand over the upload
 
+Run the command below. Replace `X.Y.Z` with the new version.
+
 ```sh
-open "https://chrome.google.com/webstore/devconsole/681f0b71-fedf-41b2-ac38-00175a64170e"
-open -R "$root/dist/enhanced-notion-X.Y.Z.zip"
+cd "$root" && node scripts/submit-checklist.ts "$last_tag" && open "$root/dist/upload-X.Y.Z/submit-checklist.html" && open -R "$root/dist/upload-X.Y.Z/enhanced-notion-X.Y.Z.zip"
 ```
 
-Give the user these steps:
+The script writes `dist/upload-X.Y.Z/` with the ZIP, the store images to upload, and `submit-checklist.html`. The page links the dashboard, and holds only the dashboard fields that changed since the last tag. Each text field has a Copy button. The script reads the fields from `store/listing.md`, so keep each field in that file as a `**Label:**` line, a `text` block, or a row of the permission table.
 
-1. Select the extension in the dashboard.
-2. On the "Package" tab, select "Upload new package", and choose the ZIP.
-3. Paste each changed field. Give the exact text from `store/listing.md`, and name each changed image.
-4. Select "Save draft", and then "Submit for Review".
+Tell the user to follow the page from top to bottom. Do not repeat the fields in chat.
 
 When the previous version is still in review, tell the user before they upload. They choose to wait, or to cancel that review.
 

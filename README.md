@@ -88,7 +88,8 @@ A comment on selected text posts without the highlight in the page text.
 
 1. Update `version` in `manifest.json`.
 2. Run `scripts/package.sh`. The script builds the extension and writes the ZIP to `dist/`.
-3. Upload the ZIP in the Chrome Developer Dashboard. `store/listing.md` holds the text for each field.
+3. Run `node scripts/submit-checklist.ts <last tag>`. The script writes `dist/upload-<version>/` with the ZIP, the store images, and `submit-checklist.html`.
+4. Open `submit-checklist.html`, and follow the steps in the Chrome Developer Dashboard. The page holds only the fields of `store/listing.md` that changed since the tag.
 
 ## Test
 
