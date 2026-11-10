@@ -180,10 +180,35 @@ function previewOf(recordMap: RecordMap, notification: any) {
   return newest && plainText(recordMap, newest.comment.text);
 }
 
+const newestEntriesOf = (recordMap: RecordMap, notification: any) => [notification, ...childrenOf(recordMap, notification).sort(byNewest)];
+
+const discussionOf = (recordMap: RecordMap, entry: any) => entry.discussion_id ?? record(recordMap, 'activity', entry.activity_id)?.discussion_id;
+
 function discussionIdOf(recordMap: RecordMap, notification: any): string | undefined {
-  return [notification, ...childrenOf(recordMap, notification).sort(byNewest)]
-    .map((entry) => entry.discussion_id ?? record(recordMap, 'activity', entry.activity_id)?.discussion_id)
+  return newestEntriesOf(recordMap, notification)
+    .map((entry) => discussionOf(recordMap, entry))
     .find(Boolean);
+}
+
+// The newest place that a notification points at: a comment discussion, and the block that holds the comment or the mention.
+function targetOf(recordMap: RecordMap, notification: any) {
+  return newestEntriesOf(recordMap, notification)
+    .map((entry) => {
+      const discussionId = discussionOf(recordMap, entry);
+      const blockId: string | undefined =
+        record(recordMap, 'activity', entry.activity_id)?.mentioned_block_id ?? record(recordMap, 'discussion', discussionId)?.parent_id;
+      return discussionId || blockId ? { discussionId, blockId } : undefined;
+    })
+    .find(Boolean);
+}
+
+function pathOf(pageId: string | undefined, target: ReturnType<typeof targetOf> | null) {
+  if (!pageId) {
+    return '/';
+  }
+  const query = target?.discussionId ? `?d=${compactId(target.discussionId)}` : '';
+  const hash = target?.blockId && target.blockId !== pageId ? `#${compactId(target.blockId)}` : '';
+  return `/p/${compactId(pageId)}${query}${hash}`;
 }
 
 function toRow(recordMap: RecordMap, notifications: any[], homeGroup: string, database: Database | null): Row {
@@ -198,7 +223,7 @@ function toRow(recordMap: RecordMap, notifications: any[], homeGroup: string, da
     homeGroup,
     ids: notifications.map((notification) => notification.id),
     unreadIds: notifications.filter((notification) => !notification.read).map((notification) => notification.id),
-    path: blockId ? `/p/${compactId(blockId)}${discussionId ? `?d=${compactId(discussionId)}` : ''}` : '/',
+    path: pathOf(blockId, newestValue((notification) => targetOf(recordMap, notification))),
     discussionId,
     title: plainText(recordMap, page?.properties?.title) || UNTITLED,
     verbs: [...new Set(notifications.map((notification) => TYPE_VERBS[notification.type] ?? notification.type))],

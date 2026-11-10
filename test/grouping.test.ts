@@ -168,8 +168,35 @@ test('groupNotifications has no preview for a row without a comment', () => {
   assert.equal(groupsFor(RULES_TEXT)[2].items[0].preview, null);
 });
 
-test('groupNotifications links to the discussion of the newest child notification', () => {
-  assert.equal(groupsFor(RULES_TEXT)[1].items[0].path, '/p/a4000000000040008000000000000004?d=d4b00000000040008000000000000042');
+test('groupNotifications links to the discussion of the newest child notification, at the block that holds it', () => {
+  assert.equal(
+    groupsFor(RULES_TEXT)[1].items[0].path,
+    '/p/a4000000000040008000000000000004?d=d4b00000000040008000000000000042#a4b00000000040008000000000000042',
+  );
+});
+
+test('groupNotifications links to the block that mentions you, even when an older notification is a comment', () => {
+  const value = (fields: object) => ({ value: { value: fields } });
+  const page = 'a9000000-0000-4000-8000-000000000009';
+  const [group] = groupNotifications(
+    {
+      notificationIds: ['m1', 'm2'],
+      recordMap: {
+        notification: {
+          m1: value({ id: 'm1', navigable_block_id: page, activity_id: 'c1', read: true, end_time: '2', type: 'user-mentioned' }),
+          m2: value({ id: 'm2', navigable_block_id: page, activity_id: 'c2', read: true, end_time: '1', type: 'commented' }),
+        },
+        activity: {
+          c1: value({ id: 'c1', type: 'user-mentioned', mentioned_block_id: 'a9b00000-0000-4000-8000-000000000009' }),
+          c2: value({ id: 'c2', type: 'commented', discussion_id: 'd9000000-0000-4000-8000-000000000009' }),
+        },
+      },
+    },
+    [],
+    {},
+  );
+  assert.equal(group.items[0].path, '/p/a9000000000040008000000000000009#a9b00000000040008000000000000009');
+  assert.equal(group.items[0].discussionId, 'd9000000-0000-4000-8000-000000000009');
 });
 
 test('groupNotifications links to the discussion of the activity', () => {
