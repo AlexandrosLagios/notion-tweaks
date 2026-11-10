@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { changedFields, parseListing } from '../scripts/submit-checklist.ts';
 
 const listing = (description: string, storage: string) => `# Chrome Web Store listing
@@ -49,6 +51,12 @@ test('the checklist holds only the fields with new text, and the image fields wi
     ['Screenshots', 'Description'],
   );
   assert.deepEqual(changedFields(before, before, []), []);
+});
+
+test('the test instructions in the listing fit the 500 characters of the dashboard field', () => {
+  const listingText = readFileSync(path.join(import.meta.dirname, '..', 'store', 'listing.md'), 'utf8');
+  const { value } = parseListing(listingText).find(({ tab }) => tab === 'Test instructions')!;
+  assert.equal(value.length <= 500, true, `${value.length} characters`);
 });
 
 test('the checklist marks a field that the last release did not have', () => {
