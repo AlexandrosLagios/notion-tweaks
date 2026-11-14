@@ -7,7 +7,7 @@ interface Fiber {
   return?: Fiber;
 }
 
-type Draft = [string, unknown?][];
+type Draft = [string, unknown[]?][];
 
 const childOf = (node: any, key: string) => (node instanceof Map ? node.get(key) : node?.[key]);
 
@@ -49,8 +49,9 @@ function readTarget(box: Element) {
           seenRecordId: seenRecordIdOf(discussionInputStore.environment, userId, inReplyToDiscussionId),
         }
       : { blockId: blockStore.id, quote: quoteOf(blockStore.id) }),
-    text: draft.map(([text]) => text).join(''),
-    isPlainText: draft.every((segment) => segment.length === 1),
+    // The textbox shows a mention by name, and the draft shows only a mention token.
+    text: box.querySelector<HTMLElement>('[role=textbox]')?.innerText.trim() || draft.map(([text]) => text).join(''),
+    richText: draft,
   };
 }
 

@@ -16,6 +16,7 @@ export interface Space {
 const UNREAD_COUNT_REQUEST_SIZE = 20;
 const IN_PLACE_TIMEOUT_MS = 5000;
 const HTTP_UNAUTHORIZED = 401;
+const HTTP_SERVER_ERROR = 500;
 const MAX_BADGE_COUNT = 99;
 
 export const pageUrl = (path: string) => `${NOTION_ORIGIN}${path}`;
@@ -23,6 +24,12 @@ export const pageUrl = (path: string) => `${NOTION_ORIGIN}${path}`;
 class NotionApiError extends Error {
   constructor(endpoint: string, detail: string) {
     super(`Notion changed ${endpoint} (${detail}). Use the Notion inbox for now.`);
+  }
+}
+
+class NotionDownError extends Error {
+  constructor(endpoint: string, status: number) {
+    super(`Notion did not answer ${endpoint} (HTTP ${status}). Try again in a minute.`);
   }
 }
 
@@ -46,6 +53,9 @@ async function post(
   });
   if (response.status === HTTP_UNAUTHORIZED) {
     throw new SignedOutError();
+  }
+  if (response.status >= HTTP_SERVER_ERROR) {
+    throw new NotionDownError(endpoint, response.status);
   }
   if (!response.ok) {
     const { message } = await response.json().catch(() => ({}));
@@ -171,7 +181,9 @@ export function markNotificationsRead(spaceId: string, notificationIds: string[]
 
 // A reply goes into a discussion. A new comment starts a discussion on a block, and quotes the selected text, if any.
 // The seen record of the user in a discussion also holds the follow state. Its id is random, so only a Notion page knows it.
-export type Comment = { userId: string; spaceId: string; text: string } & (
+// The panel shows the text. A comment from a Notion comment box also keeps the rich text, with its mentions, links, and formatting.
+export type RichText = [string, unknown[]?][];
+export type Comment = { userId: string; spaceId: string; text: string; richText?: RichText } & (
   | { discussionId: string; seenRecordId?: string }
   | { blockId: string; quote?: string }
 );
@@ -232,7 +244,7 @@ export function postComment(target: Comment, ids = newIds()) {
       },
     },
     { pointer: discussion, path: ['comments'], command: 'listAfter', args: { id: commentId } },
-    { pointer: comment, path: ['text'], command: 'set', args: [[text]] },
+    { pointer: comment, path: ['text'], command: 'set', args: target.richText ?? [[text]] },
     ...(seenRecordId
       ? [
           { pointer: seen, path: [], command: 'update', args: { ...seenRecord, last_seen_at: now } },

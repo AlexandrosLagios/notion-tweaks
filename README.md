@@ -62,7 +62,7 @@ The panel shows the last list at once when it opens, with "Updating…" in the h
 
 ## Schedule a comment
 
-A scheduled comment posts as you, with your Notion session, at the time that you choose. The comment takes plain text only, without mentions, links, or formatting.
+A scheduled comment posts as you, with your Notion session, at the time that you choose. A comment from the clock button keeps its mentions, links, and formatting. A reply from the panel takes plain text only.
 
 To reply later from the panel:
 

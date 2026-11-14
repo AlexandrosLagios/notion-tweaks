@@ -21,9 +21,7 @@ const DIALOG_STYLE = `
   .actions button[value=schedule] { color: white; background: #2383e2; border-color: #2383e2; }
 `;
 
-type Target = Comment & { isPlainText: boolean };
-
-function readTarget(box: HTMLElement): Target | null {
+function readTarget(box: HTMLElement): Comment | null {
   box.dispatchEvent(new CustomEvent(READ_EVENT, { bubbles: true }));
   const answer = box.dataset.enhancedNotionTarget;
   delete box.dataset.enhancedNotionTarget;
@@ -121,16 +119,11 @@ const pagePath = (comment: Comment) =>
 const timeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 async function sendLater(box: HTMLElement, clock: HTMLButtonElement) {
-  const target = readTarget(box);
-  if (!target) {
+  const comment = readTarget(box);
+  if (!comment) {
     return;
   }
-  const { isPlainText, ...comment } = target;
-  const problem = !comment.text.trim()
-    ? 'Write the comment first.'
-    : isPlainText
-      ? undefined
-      : 'Send later takes plain text only, without mentions, links, or formatting.';
+  const problem = comment.text.trim() ? undefined : 'Write the comment first.';
   const sendAt = await askSendAt(problem, (sendAt) =>
     scheduleEntry({
       ...comment,

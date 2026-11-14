@@ -157,6 +157,30 @@ test('postComment sends the page comment operations of the Notion web client', (
 test('postComment quotes the selected text of a new comment, without the text highlight', () =>
   postNewDiscussion(captures['selected-text-comment'], 'test 4', 'selected text'));
 
+test('postComment posts the rich text of the draft, with its mentions, links, and formatting', async () => {
+  const richText: [string, string[][]?][] = [['Hi '], ['‣', [['u', 'u1']]], [' see '], ['docs', [['a', 'https://example.com']]], [' now', [['b']]]];
+  const [{ init }] = await capturePost(
+    { userId: USER_ID, spaceId: 's1', discussionId: 'd1', text: 'Hi @Maria see docs now', richText },
+    undefined,
+  );
+  const operations: (Operation & { path: string[] })[] = JSON.parse(init.body as string).transactions[0].operations;
+  const textOperation = operations.find(({ pointer, path }) => pointer.table === 'comment' && path[0] === 'text');
+  assert.deepEqual(textOperation?.args, richText);
+});
+
+test('a server error says that Notion did not answer, because Notion did not change the request', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<html>Bad gateway</html>', { status: 502 });
+  try {
+    await assert.rejects(
+      postComment({ userId: USER_ID, spaceId: 's1', discussionId: 'd1', text: 'x' }),
+      { message: 'Notion did not answer saveTransactionsFanout (HTTP 502). Try again in a minute.' },
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('a refused request carries the reason that Notion gives', async () => {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ name: 'ValidationError', message: 'Invalid input.' }), { status: 400 });
